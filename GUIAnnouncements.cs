@@ -43,7 +43,9 @@ namespace Oxide.Plugins
         //private static Core.Libraries.Timer.TimerInstance instance;
         private Timer GetNextRestartTimer;
         private string heliLastHitPlayer = String.Empty;
+        private string chinookLastHitPlayer = String.Empty;
         private string bradleyLastHitPlayer = String.Empty;
+        private HashSet<uint> ChinookNetIDs = new HashSet<uint>();
         private HashSet<uint> BradleyNetIDs = new HashSet<uint>();
         private HashSet<uint> HeliNetIDs = new HashSet<uint>();
         private bool ConfigUpdated;
@@ -179,6 +181,22 @@ namespace Oxide.Plugins
         public string helicopterDespawnAnnouncementBannerColor { get; private set; } = "Red";
         public string helicopterDespawnAnnouncementTextColor { get; private set; } = "White";
 
+        //Chinook Announcements
+        public bool chinookSpawnAnnouncement { get; private set; } = true;
+        public bool chinookDespawnAnnouncement { get; private set; } = false;
+        public bool chinookDestroyedAnnouncement { get; private set; } = true;
+        public bool chinookDestroyedAnnouncementWithDestroyer { get; private set; } = true;
+        public string chinookSpawnAnnouncementText { get; private set; } = "Chinook is airborne!";
+        public string chinookDespawnAnnouncementText { get; private set; } = "The Chinook has left.";
+        public string chinookDestroyedAnnouncementText { get; private set; } = "The Chinook has been taken down!";
+        public string chinookDestroyedAnnouncementWithDestroyerText { get; private set; } = "{playername} got the last shot on the Chinook taking it down!";
+        public string chinookSpawnAnnouncementBannerColor { get; private set; } = "Red";
+        public string chinookSpawnAnnouncementTextColor { get; private set; } = "Orange";
+        public string chinookDestroyedAnnouncementBannerColor { get; private set; } = "Red";
+        public string chinookDestroyedAnnouncementTextColor { get; private set; } = "White";
+        public string chinookDespawnAnnouncementBannerColor { get; private set; } = "Red";
+        public string chinookDespawnAnnouncementTextColor { get; private set; } = "White";
+
         //Bradley Announcements
         public bool bradleySpawnAnnouncement { get; private set; } = true;
         public bool bradleyDespawnAnnouncement { get; private set; } = false;
@@ -195,7 +213,7 @@ namespace Oxide.Plugins
         public string bradleyDespawnAnnouncementBannerColor { get; private set; } = "Red";
         public string bradleyDespawnAnnouncementTextColor { get; private set; } = "White";
 
-		
+
         //New Player Announcements
         public bool newPlayerAnnouncements { get; private set; } = true;
         public string newPlayerAnnouncementsBannerColor { get; private set; } = "Grey";
@@ -543,6 +561,70 @@ namespace Oxide.Plugins
                 ConfigUpdated = true;
             }
 
+			//Chinook Announcements
+            chinookSpawnAnnouncement = GetConfig("Public Chinook Announcements", "Spawn", true);
+            chinookSpawnAnnouncementText = GetConfig("Public Chinook Announcements", "Spawn Text", chinookSpawnAnnouncementText);
+            chinookSpawnAnnouncementBannerColor = GetConfig("Public Chinook Announcements", "Spawn Banner Color", chinookSpawnAnnouncementBannerColor);
+            ConvertBannerColor(chinookSpawnAnnouncementBannerColor, true);
+            if (!ConvertedBannerColor)
+            {
+                ConvertedBannerColor = true;
+                PrintWarning("\"Public Chinook Announcements - Spawn Banner Color: " + chinookSpawnAnnouncementBannerColor + "\" is not a valid color, resetting to default.");
+                Config["Public Chinook Announcements", "Spawn Banner Color"] = "Red";
+                ConfigUpdated = true;
+            }
+            chinookSpawnAnnouncementTextColor = GetConfig("Public Chinook Announcements", "Spawn Text Color", chinookSpawnAnnouncementTextColor);
+            ConvertTextColor(chinookSpawnAnnouncementTextColor, true);
+            if (!ConvertedTextColor)
+            {
+                ConvertedTextColor = true;
+                PrintWarning("\"Public Chinook Announcements - Spawn Text Color: " + chinookSpawnAnnouncementTextColor + "\" is not a valid color, resetting to default.");
+                Config["Public Chinook Announcements", "Spawn Text Color"] = "Orange";
+                ConfigUpdated = true;
+            }
+            chinookDespawnAnnouncement = GetConfig("Public Chinook Announcements", "Despawn", chinookDespawnAnnouncement);
+            chinookDespawnAnnouncementText = GetConfig("Public Chinook Announcements", "Despawn Text", chinookDespawnAnnouncementText);
+            chinookDespawnAnnouncementBannerColor = GetConfig("Public Chinook Announcements", "Despawn Banner Color", chinookDespawnAnnouncementBannerColor);
+            ConvertBannerColor(chinookDespawnAnnouncementBannerColor, true);
+            if (!ConvertedBannerColor)
+            {
+                ConvertedBannerColor = true;
+                PrintWarning("\"Public Chinook Announcements - Despawn Banner Color: " + chinookDespawnAnnouncementBannerColor + "\" is not a valid color, resetting to default.");
+                Config["Public Chinook Announcements", "Despawn Banner Color"] = "Red";
+                ConfigUpdated = true;
+            }
+            chinookDespawnAnnouncementTextColor = GetConfig("Public Chinook Announcements", "Despawn Text Color", chinookDespawnAnnouncementTextColor);
+            ConvertTextColor(chinookDespawnAnnouncementTextColor, true);
+            if (!ConvertedTextColor)
+            {
+                ConvertedTextColor = true;
+                PrintWarning("\"Public Chinook Announcements - Despawn Text Color: " + chinookDespawnAnnouncementTextColor + "\" is not a valid color, resetting to default.");
+                Config["Public Chinook Announcements", "Despawn Text Color"] = "White";
+                ConfigUpdated = true;
+            }
+            chinookDestroyedAnnouncement = GetConfig("Public Chinook Announcements", "Destroyed", true);
+            chinookDestroyedAnnouncementWithDestroyer = GetConfig("Public Chinook Announcements", "Show Destroyer", true);
+            chinookDestroyedAnnouncementText = GetConfig("Public Chinook Announcements", "Destroyed Text", chinookDestroyedAnnouncementText);
+            chinookDestroyedAnnouncementWithDestroyerText = GetConfig("Public Chinook Announcements", "Destroyed Text With Destroyer", chinookDestroyedAnnouncementWithDestroyerText);
+            chinookDestroyedAnnouncementBannerColor = GetConfig("Public Chinook Announcements", "Destroyed Banner Color", chinookDestroyedAnnouncementBannerColor);
+            ConvertBannerColor(chinookDestroyedAnnouncementBannerColor, true);
+            if (!ConvertedBannerColor)
+            {
+                ConvertedBannerColor = true;
+                PrintWarning("\"Public Chinook Announcements - Destroyed Banner Color: " + chinookDestroyedAnnouncementBannerColor + "\" is not a valid color, resetting to default.");
+                Config["Public Chinook Announcements", "Destroyed Banner Color"] = "Red";
+                ConfigUpdated = true;
+            }
+            chinookDestroyedAnnouncementTextColor = GetConfig("Public Chinook Announcements", "Destroyed Text Color", chinookDestroyedAnnouncementTextColor);
+            ConvertTextColor(chinookDestroyedAnnouncementTextColor, true);
+            if (!ConvertedTextColor)
+            {
+                ConvertedTextColor = true;
+                PrintWarning("\"Public Chinook Announcements - Destroyed Text Color: " + chinookDestroyedAnnouncementTextColor + "\" is not a valid color, resetting to default.");
+                Config["Public Chinook Announcements", "Destroyed Text Color"] = "White";
+                ConfigUpdated = true;
+            }
+
 			//Bradley Announcements
             bradleySpawnAnnouncement = GetConfig("Public Bradley Announcements", "Spawn", true);
             bradleySpawnAnnouncementText = GetConfig("Public Bradley Announcements", "Spawn Text", bradleySpawnAnnouncementText);
@@ -606,7 +688,6 @@ namespace Oxide.Plugins
                 Config["Public Bradley Announcements", "Destroyed Text Color"] = "White";
                 ConfigUpdated = true;
             }
-
 
             //New Player Announcements
             newPlayerAnnouncements = GetConfig("Private New Player Announcements", "Enabled", false);
@@ -872,7 +953,7 @@ namespace Oxide.Plugins
             {
             }
         }
-        
+
         void CreatePlayerData(BasePlayer player)
         {
             var Data = new PlayerData();
@@ -997,7 +1078,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermAnnounce, this);
             permission.RegisterPermission(PermAnnounceToggle, this);
             permission.RegisterPermission(PermAnnounceJoinLeave, this);
-            
+
             foreach (BasePlayer activePlayer in BasePlayer.activePlayerList)
             {
                 if (!storedData.PlayerData.ContainsKey(activePlayer.userID))
@@ -1057,7 +1138,7 @@ namespace Oxide.Plugins
         #endregion
         //============================================================================================================
         #region GUI
-            
+
         [HookMethod("CreateAnnouncement")]
         void CreateAnnouncement(string Msg, string bannerTintColor, string textColor, BasePlayer player = null, bool isWelcomeAnnouncement = false, bool isRestartAnnouncement = false, string group = null, bool isTestAnnouncement = false)
         {
@@ -1383,6 +1464,9 @@ namespace Oxide.Plugins
         {
             if (entity is BaseHelicopter && info.Initiator is BasePlayer && helicopterDestroyedAnnouncementWithDestroyer)
                     heliLastHitPlayer = info.Initiator.ToPlayer().displayName;
+            if (entity is CH47HelicopterAIController && info.Initiator is BasePlayer && chinookDestroyedAnnouncementWithDestroyer)
+                    chinookLastHitPlayer = info.Initiator.ToPlayer().displayName;
+
             if (entity is BradleyAPC && info.Initiator is BasePlayer && bradleyDestroyedAnnouncementWithDestroyer)
                     bradleyLastHitPlayer = info.Initiator.ToPlayer().displayName;
         }
@@ -1483,7 +1567,7 @@ namespace Oxide.Plugins
                 AutomaticTimedAnnouncements();
             });
         }
-		
+
 		void RestartAnnouncementsStart()
 		{
             if (restartAnnouncements)
@@ -1497,7 +1581,7 @@ namespace Oxide.Plugins
             if (!RealTimeTimerStarted)
                 RealTimeTimer = timer.Repeat(1.0f, 0, () => RestartAnnouncements());
         }
-		
+
 
         void GetNextRestart(List<DateTime> DateTimes)
         {
@@ -1517,7 +1601,7 @@ namespace Oxide.Plugins
             CalcNextRestartDict.Clear();
             Puts("Next restart is in " + NextRestart.Subtract(DateTime.Now).ToShortString() + " at " + NextRestart.ToLongTimeString());
         }
-		
+
 		string Lang(string key, string userId = null) => lang.GetMessage(key, this, userId);
 
         #endregion
@@ -1680,13 +1764,16 @@ namespace Oxide.Plugins
             {
                 CreateAnnouncement(helicopterSpawnAnnouncementText, helicopterSpawnAnnouncementBannerColor, helicopterSpawnAnnouncementTextColor);
             }
+            if (chinookSpawnAnnouncement && entity is CH47HelicopterAIController)
+            {
+                CreateAnnouncement(chinookSpawnAnnouncementText, chinookSpawnAnnouncementBannerColor, chinookSpawnAnnouncementTextColor);
+            }
 
             if (bradleySpawnAnnouncement && entity is BradleyAPC)
             {
                 CreateAnnouncement(bradleySpawnAnnouncementText, bradleySpawnAnnouncementBannerColor, bradleySpawnAnnouncementTextColor);
             }
 
-            
             if (stockingRefillAnnouncement && entity is XMasRefill)
             {
                 CreateAnnouncement(stockingRefillAnnouncementText, stockingRefillAnnouncementBannerColor, stockingRefillAnnouncementTextColor);
@@ -1726,6 +1813,22 @@ namespace Oxide.Plugins
                 }
 
             }
+            if (chinookDestroyedAnnouncement && entity is CH47HelicopterAIController)
+            {
+                var entityNetID = entity.net.ID;
+                if (chinookDespawnAnnouncement)
+                    ChinookNetIDs.Add(entityNetID);
+                if (chinookDestroyedAnnouncementWithDestroyer)
+                {
+                    CreateAnnouncement(chinookDestroyedAnnouncementWithDestroyerText.Replace("{playername}", chinookLastHitPlayer), chinookDestroyedAnnouncementBannerColor, chinookDestroyedAnnouncementTextColor);
+                    chinookLastHitPlayer = String.Empty;
+                }
+                else
+                {
+                    CreateAnnouncement(chinookDestroyedAnnouncementText, chinookDestroyedAnnouncementBannerColor, chinookDestroyedAnnouncementTextColor);
+                }
+            }
+
             if (entity is BasePlayer)
             {
                 if (storedData.PlayerData.ContainsKey(entity.ToPlayer().userID))
@@ -1747,6 +1850,17 @@ namespace Oxide.Plugins
                         HeliNetIDs.Remove(entityNetID);
                     else if (helicopterDespawnAnnouncement)
                         CreateAnnouncement(helicopterDespawnAnnouncementText, helicopterDespawnAnnouncementBannerColor, helicopterDespawnAnnouncementTextColor);
+                });
+            }
+            if (entity is CH47HelicopterAIController)
+            {
+                var entityNetID = entity.net.ID;
+                timer.Once(2, () =>
+                {
+                    if (ChinookNetIDs.Contains(entityNetID))
+                        ChinookNetIDs.Remove(entityNetID);
+                    else if (chinookDespawnAnnouncement)
+                        CreateAnnouncement(chinookDespawnAnnouncementText, chinookDespawnAnnouncementBannerColor, chinookDespawnAnnouncementTextColor);
                 });
             }
             if (entity is BradleyAPC)
