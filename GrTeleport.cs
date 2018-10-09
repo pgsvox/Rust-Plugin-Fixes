@@ -1080,6 +1080,15 @@ namespace Oxide.Plugins
 
             var userGroupData = GetUsersGroupDataOrDefault(player);
             var index = GridIndexFromReference(gr);
+			string parent = string.Empty;
+			try
+			{
+				parent = player.GetParentEntity().ToString();
+			}
+			catch
+			{
+				parent = string.Empty;
+			}
 
             if (index == -1)
             {
@@ -1093,7 +1102,7 @@ namespace Oxide.Plugins
                 return false;
             }
 			
-            if (player.GetParentEntity().ToString().Contains("cargoship") && !grTeleportData.AllowOffCargoship)
+            if (parent.Contains("cargoship") && !grTeleportData.AllowOffCargoship)
             {
                 PrintToChat(player, lang.GetMessage("cargoship", this, player.UserIDString));
                 return false;
