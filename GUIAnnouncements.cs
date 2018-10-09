@@ -213,6 +213,16 @@ namespace Oxide.Plugins
         public string bradleyDespawnAnnouncementBannerColor { get; private set; } = "Red";
         public string bradleyDespawnAnnouncementTextColor { get; private set; } = "White";
 
+        //Cargoship Announcements
+        public bool cargoshipSpawnAnnouncement { get; private set; } = true;
+        public bool cargoshipDespawnAnnouncement { get; private set; } = true;
+        public string cargoshipSpawnAnnouncementText { get; private set; } = "Cargoship is patrolling!";
+        public string cargoshipDespawnAnnouncementText { get; private set; } = "The Cargoship has left.";
+        public string cargoshipSpawnAnnouncementBannerColor { get; private set; } = "Red";
+        public string cargoshipSpawnAnnouncementTextColor { get; private set; } = "Orange";
+        public string cargoshipDespawnAnnouncementBannerColor { get; private set; } = "Red";
+        public string cargoshipDespawnAnnouncementTextColor { get; private set; } = "White";
+		
 
         //New Player Announcements
         public bool newPlayerAnnouncements { get; private set; } = true;
@@ -622,6 +632,48 @@ namespace Oxide.Plugins
                 ConvertedTextColor = true;
                 PrintWarning("\"Public Chinook Announcements - Destroyed Text Color: " + chinookDestroyedAnnouncementTextColor + "\" is not a valid color, resetting to default.");
                 Config["Public Chinook Announcements", "Destroyed Text Color"] = "White";
+                ConfigUpdated = true;
+            }
+
+			//Cargoship Announcements
+            cargoshipSpawnAnnouncement = GetConfig("Public Cargoship Announcements", "Spawn", true);
+            cargoshipSpawnAnnouncementText = GetConfig("Public Cargoship Announcements", "Spawn Text", cargoshipSpawnAnnouncementText);
+            cargoshipSpawnAnnouncementBannerColor = GetConfig("Public Cargoship Announcements", "Spawn Banner Color", cargoshipSpawnAnnouncementBannerColor);
+            ConvertBannerColor(cargoshipSpawnAnnouncementBannerColor, true);
+            if (!ConvertedBannerColor)
+            {
+                ConvertedBannerColor = true;
+                PrintWarning("\"Public Cargoship Announcements - Spawn Banner Color: " + cargoshipSpawnAnnouncementBannerColor + "\" is not a valid color, resetting to default.");
+                Config["Public Cargoship Announcements", "Spawn Banner Color"] = "Red";
+                ConfigUpdated = true;
+            }
+            cargoshipSpawnAnnouncementTextColor = GetConfig("Public Cargoship Announcements", "Spawn Text Color", cargoshipSpawnAnnouncementTextColor);
+            ConvertTextColor(cargoshipSpawnAnnouncementTextColor, true);
+            if (!ConvertedTextColor)
+            {
+                ConvertedTextColor = true;
+                PrintWarning("\"Public Cargoship Announcements - Spawn Text Color: " + cargoshipSpawnAnnouncementTextColor + "\" is not a valid color, resetting to default.");
+                Config["Public Cargoship Announcements", "Spawn Text Color"] = "Orange";
+                ConfigUpdated = true;
+            }
+            cargoshipDespawnAnnouncement = GetConfig("Public Cargoship Announcements", "Despawn", cargoshipDespawnAnnouncement);
+            cargoshipDespawnAnnouncementText = GetConfig("Public Cargoship Announcements", "Despawn Text", cargoshipDespawnAnnouncementText);
+            cargoshipDespawnAnnouncementBannerColor = GetConfig("Public Cargoship Announcements", "Despawn Banner Color", cargoshipDespawnAnnouncementBannerColor);
+            ConvertBannerColor(cargoshipDespawnAnnouncementBannerColor, true);
+            if (!ConvertedBannerColor)
+            {
+                ConvertedBannerColor = true;
+                PrintWarning("\"Public Cargoship Announcements - Despawn Banner Color: " + cargoshipDespawnAnnouncementBannerColor + "\" is not a valid color, resetting to default.");
+                Config["Public Cargoship Announcements", "Despawn Banner Color"] = "Red";
+                ConfigUpdated = true;
+            }
+            cargoshipDespawnAnnouncementTextColor = GetConfig("Public Cargoship Announcements", "Despawn Text Color", cargoshipDespawnAnnouncementTextColor);
+            ConvertTextColor(cargoshipDespawnAnnouncementTextColor, true);
+            if (!ConvertedTextColor)
+            {
+                ConvertedTextColor = true;
+                PrintWarning("\"Public Cargoship Announcements - Despawn Text Color: " + cargoshipDespawnAnnouncementTextColor + "\" is not a valid color, resetting to default.");
+                Config["Public Cargoship Announcements", "Despawn Text Color"] = "White";
                 ConfigUpdated = true;
             }
 
@@ -1774,6 +1826,11 @@ namespace Oxide.Plugins
                 CreateAnnouncement(bradleySpawnAnnouncementText, bradleySpawnAnnouncementBannerColor, bradleySpawnAnnouncementTextColor);
             }
 
+            if (cargoshipSpawnAnnouncement && entity is CargoShip)
+            {
+                CreateAnnouncement(cargoshipSpawnAnnouncementText, cargoshipSpawnAnnouncementBannerColor, cargoshipSpawnAnnouncementTextColor);
+            }
+
             if (stockingRefillAnnouncement && entity is XMasRefill)
             {
                 CreateAnnouncement(stockingRefillAnnouncementText, stockingRefillAnnouncementBannerColor, stockingRefillAnnouncementTextColor);
@@ -1787,7 +1844,7 @@ namespace Oxide.Plugins
                 var entityNetID = entity.net.ID;
                 if (helicopterDespawnAnnouncement)
                     HeliNetIDs.Add(entityNetID);
-                if (helicopterDestroyedAnnouncementWithDestroyer)
+                if (helicopterDestroyedAnnouncementWithDestroyer && heliLastHitPlayer != null)
                 {
                     CreateAnnouncement(helicopterDestroyedAnnouncementWithDestroyerText.Replace("{playername}", heliLastHitPlayer), helicopterDestroyedAnnouncementBannerColor, helicopterDestroyedAnnouncementTextColor);
                     heliLastHitPlayer = String.Empty;
@@ -1795,6 +1852,7 @@ namespace Oxide.Plugins
                 else
                 {
                     CreateAnnouncement(helicopterDestroyedAnnouncementText, helicopterDestroyedAnnouncementBannerColor, helicopterDestroyedAnnouncementTextColor);
+					heliLastHitPlayer = String.Empty;
                 }
 			}
             if (bradleyDestroyedAnnouncement && entity is BradleyAPC)
@@ -1802,7 +1860,7 @@ namespace Oxide.Plugins
                 var entityNetID = entity.net.ID;
                 if (bradleyDespawnAnnouncement)
                     BradleyNetIDs.Add(entityNetID);
-                if (bradleyDestroyedAnnouncementWithDestroyer)
+                if (bradleyDestroyedAnnouncementWithDestroyer && bradleyLastHitPlayer != null)
                 {
                     CreateAnnouncement(bradleyDestroyedAnnouncementWithDestroyerText.Replace("{playername}", bradleyLastHitPlayer), bradleyDestroyedAnnouncementBannerColor, bradleyDestroyedAnnouncementTextColor);
                     bradleyLastHitPlayer = String.Empty;
@@ -1810,15 +1868,17 @@ namespace Oxide.Plugins
                 else
                 {
                     CreateAnnouncement(bradleyDestroyedAnnouncementText, bradleyDestroyedAnnouncementBannerColor, bradleyDestroyedAnnouncementTextColor);
+					bradleyLastHitPlayer = String.Empty;
                 }
 
             }
+
             if (chinookDestroyedAnnouncement && entity is CH47HelicopterAIController)
             {
                 var entityNetID = entity.net.ID;
                 if (chinookDespawnAnnouncement)
                     ChinookNetIDs.Add(entityNetID);
-                if (chinookDestroyedAnnouncementWithDestroyer)
+                if (chinookDestroyedAnnouncementWithDestroyer && chinookLastHitPlayer != null)
                 {
                     CreateAnnouncement(chinookDestroyedAnnouncementWithDestroyerText.Replace("{playername}", chinookLastHitPlayer), chinookDestroyedAnnouncementBannerColor, chinookDestroyedAnnouncementTextColor);
                     chinookLastHitPlayer = String.Empty;
@@ -1826,6 +1886,7 @@ namespace Oxide.Plugins
                 else
                 {
                     CreateAnnouncement(chinookDestroyedAnnouncementText, chinookDestroyedAnnouncementBannerColor, chinookDestroyedAnnouncementTextColor);
+					chinookLastHitPlayer = String.Empty;
                 }
             }
 
@@ -1874,7 +1935,15 @@ namespace Oxide.Plugins
                         CreateAnnouncement(bradleyDespawnAnnouncementText, bradleyDespawnAnnouncementBannerColor, bradleyDespawnAnnouncementTextColor);
                 });
             }
-
+            if (entity is CargoShip)
+            {
+                var entityNetID = entity.net.ID;
+                timer.Once(2, () =>
+                {
+                    if (cargoshipDespawnAnnouncement)
+                        CreateAnnouncement(cargoshipDespawnAnnouncementText, cargoshipDespawnAnnouncementBannerColor, cargoshipDespawnAnnouncementTextColor);
+                });
+            }
         }
 
         void OnAirdrop(CargoPlane plane, Vector3 location)
