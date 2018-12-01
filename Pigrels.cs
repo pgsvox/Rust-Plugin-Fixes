@@ -461,9 +461,9 @@ namespace Oxide.Plugins
             lang.RegisterMessages(messages,this);
         }
 
-        void OnServerSave()
-        {
-            Config.WriteObject(configData);
-        }
+        // void OnServerSave()
+        // {
+        //     Config.WriteObject(configData);
+        // }
     }
 }

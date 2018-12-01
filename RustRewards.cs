@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Linq;
 using System.Reflection;
 using Oxide.Core.Plugins;
@@ -12,681 +13,733 @@ using System.Collections;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core.Configuration;
 using Oxide.Core.Libraries.Covalence;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("RustRewards", "MSpeedie", "2.0.07")]
+	[Info("Rust Rewards", "MSpeedie", "2.0.15")]
 	[Description("Rewards players for activities using Economic or ServerRewards")]
-	// Big Tahnk you to Tarek the original author of this plugin!
+	// Big Thank you to Tarek the original author of this plugin!
+	// redBDGR, for maintaining the Barrel Points plugin
+    // Scriptzyy, the original author of the Barrel Points plugin
+    // Mr. Bubbles, the original author of the Gather Rewards plugin
+    // CanopySheep and Wulf, for maintaining the Gather Rewards plugin
 	public class RustRewards : RustPlugin
 	{
-		[PluginReference]
-		Plugin Economics, ServerRewards, Friends, Clans;
+		[PluginReference] Plugin Economics;
+        [PluginReference] Plugin ServerRewards;
+        [PluginReference] Plugin Clans;
+        [PluginReference] Plugin Friends;
 
-		private CultureInfo CurrencyCulture = CultureInfo.CreateSpecificCulture("en-US");  // change this to change the currency symbol
-
-		private bool IsFriendsLoaded = false;
-		private bool IsEconomicsLoaded = false;
-		private bool IsServerRewardsLoaded = false;
-		private bool IsClansLoaded = false;
-		//private bool IsNPCLoaded = false;
-		private BasePlayer heliLastHitPlayer;
-		private BasePlayer chinookLastHitPlayer;
-		private BasePlayer bradleyLastHitPlayer;
-
-		// private List<uint> EntityCollectionCache = new List<uint>();
-		private Dictionary<uint, BasePlayer> EntityCollectionCache = new Dictionary<uint, BasePlayer>();
+		readonly private CultureInfo CurrencyCulture = CultureInfo.CreateSpecificCulture("en-US");  // change this to change the currency symbol
 		readonly DynamicConfigFile dataFile = Interface.Oxide.DataFileSystem.GetFile("RustRewards");
+
+		private Dictionary<uint, IPlayer> EntityCollectionCache = new Dictionary<uint, IPlayer>();
 		private Dictionary<string, string> playerPrefs = new Dictionary<string, string>();
 
-		private bool HappyHourActive = false;
-		private bool HappyHourCross24 = false;
-		private Timer timeCheck;
+		const string permVIP   = "rustrewards.vip";
 
-		StoredData storedData;
+		// to indicate I need to update the json file
+		bool _didConfigChange;
 
-		RewardRates rr;
-		Multipliers m;
-		Options o;
-		Rewards_Version rv; //Strings str;
-		public List<string> Options_itemList = new List<string> {
-				"NPCReward_Enabled",
-				"VIPMultiplier_Enabled",
-				"ActivityReward_Enabled",
-				"WelcomeMoney_Enabled",
-				"WeaponMultiplier_Enabled",
-				"DistanceMultiplier_Enabled",
-				"UseEconomicsPlugin",
-				"UseServerRewardsPlugin",
-				"UseFriendsPlugin",
-				"UseClansPlugin",
-				"Economics_TakeMoneyFromVictim",
-				"ServerRewards_TakeMoneyFromVictim",
-				"PrintToConsole",
-				"HappyHour_Enabled"
-				};
-		public List<string> Multipliers_itemList = new List<string> {
-				"AssaultRifle",
-				"BeancanGrenade",
-				"BoltActionRifle",
-				"BoneClub",
-				"BoneKnife",
-				"CandyCaneClub",
-				"CompoundBow",
-				"Crossbow",
-				"CustomSMG",
-				"DoubleBarrelShotgun",
-				"EokaPistol",
-				"F1Grenade",
-				"HandmadeFishingRod",
-				"HuntingBow",
-				"LR300",
-				"Longsword",
-				"M249",
-				"M92Pistol",
-				"MP5A4",
-				"Mace",
-				"Machete",
-				"NailGun",
-				"PumpShotgun",
-				"PythonRevolver",
-				"Revolver",
-				"RocketLauncher",
-				"SalvagedCleaver",
-				"SalvagedSword",
-				"SatchelCharge",
-				"SemiAutomaticPistol",
-				"SemiAutomaticRifle",
-				"Snowball",
-				"Spas12Shotgun",
-				"StoneSpear",
-				"Thompson",
-				"TimedExplosiveCharge",
-				"WaterpipeShotgun",
-				"WoodenSpear",
-				"VIPMultiplier",
-				"HappyHourMultiplier",
-				"distance_100",
-				"distance_200",
-				"distance_300",
-				"distance_400",
-				"distance_50"
+		private bool serverrewardsloaded               = false;
+		private bool economicsloaded                   = false;
+		private bool clansloaded                       = false;
+		private bool friendsloaded                     = false;
+		private bool happyhouractive                   = false;
+		private bool happyhourcross24                  = false;
+		private bool NPCReward_Enabled                 = true;
+		private bool VIPMultiplier_Enabled             = false;
+		private bool ActivityReward_Enabled            = false;
+		private bool PickupReward_Enabled              = false;
+		private bool WelcomeMoney_Enabled              = false;
+		private bool WeaponMultiplier_Enabled          = false;
+		private bool DistanceMultiplier_Enabled        = false;
+		private bool UseEconomicsPlugin                = false;
+		private bool UseServerRewardsPlugin            = true;
+		private bool UseFriendsPlugin                  = true;
+		private bool UseClansPlugin                    = true;
+		private bool TakeMoneyfromVictim               = false;
+		private bool PrintInConsole                    = false;
+		private bool DoLogging                         = true;
+		private bool ShowcurrencySymbol                = true;
+		private bool HappyHour_Enabled                 = true;
 
-				};
-		public List<string> Rewards_itemList = new List<string> {
-				"autoturret",
-				"barrel",
-				"bear",
-				"boar",
-				"bradley",
-				"cactus",
-				"chicken",
-				"chinook",
-				"corn",
-				"crate",
-				"foodbox",
-				"helicopter",
-				"hemp",
-				"horse",
-				"human",
-				"minecart",
-				"mushrooms",
-				"ore",
-				"pumpkin",
-				"murderer",
-				"scientist",
-				"stag",
-				"stones",
-				"supplysignal",
-				"wolf",
-				"wood",
-				"NPCKill_Reward",
-				"ActivityRewardRate_minutes",
-				"ActivityReward",
-				"WelcomeMoney",
-				"HappyHour_BeginHour",
-				"HappyHour_EndHour"
-				};
-		//public List<string> Strings_itemList = new List<string> { "CustomPermissionName" };
-		//private Strings strings = new Strings();
-		private Rewards_Version rewardsversion = new Rewards_Version();
-		private RewardRates rewardrates = new RewardRates();
-		private Options options = new Options();
-		private Multipliers multipliers = new Multipliers();
+		private int  ActivityReward_Minutes            = 15;
+		private int  HappyHour_BeginHour               = 18;
+		private int  HappyHour_EndHour		           = 21;
 
-		private Dictionary<BasePlayer, int> LastReward = new Dictionary<BasePlayer, int>();
+		private IPlayer helilasthitplayer;
+		private IPlayer chinooklasthitplayer;
+		private IPlayer bradleylasthitplayer;
 
-		private void OnServerInitialized()
+		private Timer timecheck;
+
+		private double mult_rocket               = 1.0;
+		private double mult_flamethrower         = 1.0;
+		private double mult_hammer_salvaged      = 1.0;
+		private double mult_icepick_salvaged     = 1.0;
+		private double mult_axe_salvaged         = 1.0;
+		private double mult_stone_pickaxe        = 1.0;
+		private double mult_pickaxe              = 1.0;
+		private double mult_stonehatchet         = 1.0;
+		private double mult_hatchet              = 1.0;
+		private double mult_butcherknife         = 1.0;
+		private double mult_pitchfork            = 1.0;
+		private double mult_sickle               = 1.0;
+		private double mult_torch                = 1.0;
+		private double mult_flashlight           = 1.0;
+		private double mult_chainsaw             = 1.0;
+		private double mult_jackhammer           = 1.0;
+		private double mult_assaultrifle         = 1.0;
+		private double mult_beancangrenade       = 1.0;
+		private double mult_boltactionrifle      = 1.0;
+		private double mult_boneclub             = 1.0;
+		private double mult_boneknife            = 1.0;
+		private double mult_candycaneclub        = 1.0;
+		private double mult_compoundbow          = 1.0;
+		private double mult_crossbow             = 1.0;
+		private double mult_customsmg            = 1.0;
+		private double mult_doublebarrelshotgun  = 1.0;
+		private double mult_eokapistol           = 1.0;
+		private double mult_f1grenade            = 1.0;
+		private double mult_handmadefishingrod   = 1.0;
+		private double mult_huntingbow           = 1.0;
+		private double mult_l96rifle             = 1.0;
+		private double mult_lr300                = 1.0;
+		private double mult_longsword            = 1.0;
+		private double mult_m249                 = 1.0;
+		private double mult_m92pistol            = 1.0;
+		private double mult_mp5a4                = 1.0;
+		private double mult_mace                 = 1.0;
+		private double mult_machete              = 1.0;
+		private double mult_nailgun              = 1.0;
+		private double mult_pumpshotgun          = 1.0;
+		private double mult_pythonrevolver       = 1.0;
+		private double mult_revolver             = 1.0;
+		private double mult_rocketlauncher       = 1.0;
+		private double mult_salvagedcleaver      = 1.0;
+		private double mult_salvagedsword        = 1.0;
+		private double mult_satchelcharge        = 1.0;
+		private double mult_semiautomaticpistol  = 1.0;
+		private double mult_semiautomaticrifle   = 1.0;
+		private double mult_snowball             = 1.0;
+		private double mult_spas12shotgun        = 1.0;
+		private double mult_stonespear           = 1.0;
+		private double mult_thompson             = 1.0;
+		private double mult_timedexplosivecharge = 1.0;
+		private double mult_waterpipeshotgun     = 1.0;
+		private double mult_woodenspear          = 1.0;
+		private double mult_VIPMultiplier        = 1.0;
+		private double mult_HappyHourMultiplier  = 1.0;
+		private double mult_distance_100         = 1.0;
+		private double mult_distance_200         = 1.0;
+		private double mult_distance_300         = 1.0;
+		private double mult_distance_400         = 1.0;
+		private double mult_distance_50		     = 1.0;
+		private double rate_autoturret           = 1.0;
+		private double rate_barrel               = 1.0;
+		private double rate_bear                 = 1.0;
+		private double rate_boar                 = 1.0;
+		private double rate_bradley              = 1.0;
+		private double rate_cactus               = 1.0;
+		private double rate_chicken              = 1.0;
+		private double rate_chinook              = 1.0;
+		private double rate_corn                 = 1.0;
+		private double rate_crate                = 1.0;
+		private double rate_foodbox              = 1.0;
+		private double rate_giftbox              = 1.0;
+		private double rate_helicopter           = 1.0;
+		private double rate_hemp                 = 1.0;
+		private double rate_horse                = 1.0;
+		private double rate_player               = 1.0;
+		private double rate_minecart             = 1.0;
+		private double rate_mushrooms            = 1.0;
+		private double rate_ore                  = 1.0;
+		private double rate_pumpkin              = 1.0;
+		private double rate_murderer             = 1.0;
+		private double rate_scientist            = 1.0;
+		private double rate_stag                 = 1.0;
+		private double rate_stones               = 1.0;
+		private double rate_sulfur               = 1.0;
+		private double rate_supplycrate          = 1.0;
+		private double rate_wolf                 = 1.0;
+		private double rate_wood                 = 1.0;
+		private double rate_npckill              = 1.0;
+		private double rate_activityreward       = 1.0;
+		private double rate_welcomemoney         = 1.0;
+
+		private Dictionary<IPlayer, int> Activity_Reward = new Dictionary<IPlayer, int>();
+
+		protected override void LoadDefaultConfig(){}
+
+		object GetConfigValue(string category, string setting, object defaultValue)
 		{
-			if (options.UseEconomicsPlugin)
+			Dictionary < string, object > data = new Dictionary < string, object >();
+			object value = defaultValue;
+			if (category == null || category == String.Empty)
 			{
-				if (Economics != null)
-					IsEconomicsLoaded = true;
-				else
-				{
-					IsEconomicsLoaded = false;
-					PrintWarning("Economics plugin was not found! Can't reward players using Economics.");
-				}
+				Puts("Tell MSpeedie No Category for config");
+			}
+			if (setting == null || setting == String.Empty)
+			{
+				Puts("Tell MSpeedie No Setting for config");
 			}
 
-			if (options.UseServerRewardsPlugin)
+			try
 			{
-				if(ServerRewards != null)
-					IsServerRewardsLoaded = true;
-				else
-				{
-					IsServerRewardsLoaded = false;
-					PrintWarning("ServerRewards plugin was not found! Can't reward players using ServerRewards.");
-				}
+				data = Config[category] as Dictionary < string, object > ;
 			}
-			if (options.UseFriendsPlugin)
+			catch
 			{
-				if (Friends != null)
-					IsFriendsLoaded = true;
-				else
-				{
-					IsFriendsLoaded = false;
-					PrintWarning("Friends plugin was not found! Can't check if victim is friend to killer.");
-				}
+				Puts("Tell MSpeedie Error getting config");
 			}
 
-			if (options.UseClansPlugin)
+			if (data == null)
 			{
-				if (Clans != null)
-					IsClansLoaded = true;
-				else
-				{
-					IsClansLoaded = false;
-					PrintWarning("Clans plugin was not found! Can't check if victim is in the same clan of killer.");
-				}
+				data = new Dictionary < string, object > ();
+				Config[category] = data;
+				_didConfigChange = true;
 			}
+
+			try
+			{
+				if (data.TryGetValue(setting, out value)) return value;
+			}
+			catch
+			{
+				value = defaultValue;
+			}
+
+			value = defaultValue;
+			data[setting] = value;
+			_didConfigChange = true;
+			return value;
 		}
 
-		protected override void LoadDefaultConfig()
+		object SetConfigValue(string category, string setting, object defaultValue)
 		{
-			PrintWarning("Creating a new configuration file");
-			Config["Rewards_Version"] = rv;
-			Config["Rewards"] = rr;
-			Config["Multipliers"] = m;
-			Config["Options"] = o;
-			SaveConfig();
-			LoadConfig();
+			var data = Config[category] as Dictionary < string, object > ;
+			object value;
+
+			if (data == null)
+			{
+			data = new Dictionary < string, object > ();
+			Config[category] = data;
+			_didConfigChange = true;
+			}
+
+			value = defaultValue;
+			data[setting] = value;
+			_didConfigChange = true;
+			return value;
+		}
+
+		private void CheckConfig()
+		{
+			if (UseEconomicsPlugin == false && UseServerRewardsPlugin == false)
+				PrintWarning("You need to select Economics or ServerReward or this plugin is pointless.");
+
+			try
+			{
+				if (UseEconomicsPlugin)
+				{
+					if (Economics != null && Economics.IsLoaded == true)
+						economicsloaded = true;
+					else
+					{
+						economicsloaded = false;
+						PrintWarning("Economics plugin was not found! Can't reward players using Economics.");
+					}
+				}
+			}
+			catch
+			{
+				economicsloaded = false;
+			}
+
+			try
+			{
+				if (UseServerRewardsPlugin)
+				{
+					if(ServerRewards != null && ServerRewards.IsLoaded == true)
+						serverrewardsloaded = true;
+					else
+					{
+						serverrewardsloaded = false;
+						PrintWarning("ServerRewards plugin was not found! Can't reward players using ServerRewards.");
+					}
+				}
+			}
+			catch
+			{
+				serverrewardsloaded = false;
+			}
+
+			try
+			{
+				if (UseFriendsPlugin)
+				{
+					if (Friends != null && Friends.IsLoaded == true)
+						friendsloaded = true;
+					else
+					{
+						friendsloaded = false;
+						PrintWarning("Friends plugin was not found! Can't check if victim is friend to killer.");
+					}
+				}
+			}
+			catch
+			{
+				friendsloaded = false;
+			}
+
+			try
+			{
+				if (UseClansPlugin)
+				{
+					if (Clans != null && Clans.IsLoaded == true)
+						clansloaded = true;
+					else
+					{
+						clansloaded = false;
+						PrintWarning("Clans plugin was not found! Can't check if victim is in the same clan of killer.");
+					}
+				}
+			}
+			catch
+			{
+				clansloaded = false;
+			}
 		}
 
 		protected override void LoadDefaultMessages()
 		{
 			lang.RegisterMessages(new Dictionary<string, string>
 			{
-				["CollectReward"] = "You received {0}. Reward for collecting {1}",
-				["KillReward"] = "You received {0}. Reward for killing {1}",
-				["ActivityReward"] = "You received {0}. Reward for activity",
-				["WelcomeReward"] = "Welcome to server! You received {0} as a welcome reward",
+				["activity"] = "You received {0} Reward for activity.",
+				["autoturret"] = "You received {0} for destroying an autoturret",
+				["barrel"] = "You received {0} Reward for looting a Barrel",
+				["barrel"] = "You received {0} for destroying a barrel.",
+				["bear"] = "You received {0} Reward for killing a bear",
+				["boar"] = "You received {0} Reward for killing a boar",
+				["bradley"] = "You received {0} Reward for killing a Bradley APC",
+				["cactus"] = "You received {0} Reward for collecting Cactus",
+				["chicken"] = "You received {0} Reward for killing a chicken",
+				["chinook"] = "You received {0} Reward for killing a chinook CH47",
+				["collect"] = "You received {0} Reward for collecting {1}.",
+				["corn"] = "You received {0} Reward for collecting Corn.",
+				["crate"] = "You received {0} Reward for looting a Crate",
+				["foodbox"] = "You received {0} for looting a food box.",
+				["giftbox"] = "You received {0} for looting a gift box.",
+				["helicopter"] = "You received {0} Reward for killing a helicopter",
+				["hemp"] = "You received {0} Reward for collecting Hemp",
+				["horse"] = "You received {0} Reward for killing a horse",
+				["kill"] = "You received {0} Reward for killing {1}.",
+				["minecart"] = "You received {0} Reward for looting a Mine Cart",
+				["minecart"] = "You received {0} for looting a minecart.",
+				["murderer"] = "You received {0} Reward for killing a zombie/murderer",
+				["mushrooms"] = "You received {0} Reward for collecting Mushrooms",
+				["npc"] = "You received {0} Reward for killing a NPC",
+				["ore"] = "You received {0} Reward for collecting Ore",
+				["player"] = "You received {0} Reward for killing a player",
+				["pumpkin"] = "You received {0} Reward for collecting Pumpkin",
+				["scientist"] = "You received {0} Reward for killing a scientist",
+				["stag"] = "You received {0} Reward for killing a stag",
+				["stones"] = "You received {0} Reward for collecting Stones",
+				["sulfur"] = "You received {0} Reward for collecting Sulfur",
+				["supplycrate"] = "You received {0} Reward for looting a supply crate",
+				["welcomereward"] = "Welcome to server! You received {0} as a welcome reward.",
+				["wolf"] = "You received {0} Reward for killing a wolf",
+				["wood"] = "You received {0} Reward for collecting Wood",
+				["HappyHourEnd"] = "Happy Hour(s) ended.",
+				["HappyHourStart"] = "Happy Hour(s) started.",
+				["Prefix"] = "Rust Rewards",
+				["rrm change"] = "Rewards Messages for {0} is now {1}",
+				["rrm syntax"] = "/rrm syntax:  /rrm type state  Type is one of h,o or k (Havest, Open or Kill).  State is on or off.  for example /rrm h off",
+				["rrm type"] = "type must be one of: h o or k only. (Havest, Open or Kill",
+				["rrm state"] = "state need to be one of: on or off.",
 				["VictimNoMoney"] = "{0} doesn't have enough money.",
-				["SetRewards"] = "Varaibles you can set:",
-				["RewardSet"] = "Reward was set",
-				["cactus"] = "Cactus",
-				["ore"] = "Ore",
-				["wood"] = "Wood",
-				["stones"] = "Stones",
-				["corn"] = "Corn",
-				["hemp"] = "Hemp",
-				["mushrooms"] = "Mushrooms",
-				["pumpkin"] = "Pumpkin",
-				["stag"] = "a stag",
-				["boar"] = "a boar",
-				["horse"] = "a horse",
-				["bear"] = "a bear",
-				["wolf"] = "a wolf",
-				["chicken"] = "a chicken",
-				["autoturret"] = "an autoturret",
-				["helicopter"] = "a helicopter",
-				["chinook"] = "a chinook CH47",
-				["murderer"] = "a zombie (murderer)",
-				["scientist"] = "a scientist",
-				["npc"] = "a npc",
-				["bradley"] = "a Bradley APC",
-				["Prefix"] = "Rewards",
-				["HappyHourStart"] = "Happy Hour(s) started",
-				["HappyHourEnd"] = "Happy Hour(s) ended",
-				["BarrelReward"] = "You received {0} for destroying a barrel!",
-				["FoodBoxReward"] = "You received {0} for looting a food box!",
-				["CrateReward"] = "You received {0} for looting a crate!",
-				["SupplySignalReward"] = "You received {0} for looting a supply signal!",
-				["MineCartReward"] = "You received {0} for looting a minecart!",
-				["MsgOn"] = "Rewards Messages On.",
-				["MsgOff"] = "Rewards Messages Off."
+				["rewardset"] = "Reward was set",
+				["setrewards"] = "Variables you can set:"
 			}, this);
 		}
 
-		private void SetDefaultConfigValues()
+	void LoadConfigValues()
+	{
+		NPCReward_Enabled          = Convert.ToBoolean(GetConfigValue("settings","NPCReward_Enabled","true"));
+		VIPMultiplier_Enabled      = Convert.ToBoolean(GetConfigValue("settings","VIPMultiplier_Enabled","false"));
+		ActivityReward_Enabled     = Convert.ToBoolean(GetConfigValue("settings","ActivityReward_Enabled","true"));
+		WelcomeMoney_Enabled       = Convert.ToBoolean(GetConfigValue("settings","WelcomeMoney_Enabled","true"));
+		PickupReward_Enabled       = Convert.ToBoolean(GetConfigValue("settings","PickupReward_Enabled","true"));
+		WeaponMultiplier_Enabled   = Convert.ToBoolean(GetConfigValue("settings","WeaponMultiplier_Enabled","true"));
+		DistanceMultiplier_Enabled = Convert.ToBoolean(GetConfigValue("settings","DistanceMultiplier_Enabled","true"));
+		UseEconomicsPlugin         = Convert.ToBoolean(GetConfigValue("settings","UseEconomicsPlugin","false"));
+		UseServerRewardsPlugin     = Convert.ToBoolean(GetConfigValue("settings","UseServerRewardsPlugin","false"));
+		UseFriendsPlugin           = Convert.ToBoolean(GetConfigValue("settings","UseFriendsPlugin","true"));
+		UseClansPlugin             = Convert.ToBoolean(GetConfigValue("settings","UseClansPlugin","true"));
+		TakeMoneyfromVictim        = Convert.ToBoolean(GetConfigValue("settings","TakeMoneyfromVictim","false"));
+		PrintInConsole             = Convert.ToBoolean(GetConfigValue("settings","PrintInConsole","false"));
+		DoLogging                  = Convert.ToBoolean(GetConfigValue("settings","DoLogging","true"));
+		ShowcurrencySymbol         = Convert.ToBoolean(GetConfigValue("settings","ShowcurrencySymbol","true"));
+		HappyHour_Enabled          = Convert.ToBoolean(GetConfigValue("settings","HappyHour_Enabled","true"));
+
+		ActivityReward_Minutes     = Convert.ToInt32(GetConfigValue("settings","ActivityReward_Minutes", 15));
+		HappyHour_BeginHour        = Convert.ToInt32(GetConfigValue("settings","HappyHour_BeginHour", 17));
+		HappyHour_EndHour		   = Convert.ToInt32(GetConfigValue("settings","HappyHour_EndHour", 21));
+
+		mult_rocket                = Convert.ToDouble(GetConfigValue("multipliers","rocket", 1));
+        mult_flamethrower          = Convert.ToDouble(GetConfigValue("multipliers","flamethrower", 1));
+        mult_hammer_salvaged       = Convert.ToDouble(GetConfigValue("multipliers","hammer_salvaged", 1));
+        mult_icepick_salvaged      = Convert.ToDouble(GetConfigValue("multipliers","icepick_salvaged", 1));
+        mult_axe_salvaged          = Convert.ToDouble(GetConfigValue("multipliers","axe_salvaged", 1));
+        mult_stone_pickaxe         = Convert.ToDouble(GetConfigValue("multipliers","stone_pickaxe", 1));
+        mult_pickaxe               = Convert.ToDouble(GetConfigValue("multipliers","pickaxe", 1));
+        mult_stonehatchet          = Convert.ToDouble(GetConfigValue("multipliers","stonehatchet", 1));
+        mult_hatchet               = Convert.ToDouble(GetConfigValue("multipliers","hatchet", 1));
+        mult_butcherknife          = Convert.ToDouble(GetConfigValue("multipliers","butcherknife", 1));
+        mult_pitchfork             = Convert.ToDouble(GetConfigValue("multipliers","pitchfork", 1));
+        mult_sickle                = Convert.ToDouble(GetConfigValue("multipliers","sickle", 1));
+        mult_torch                 = Convert.ToDouble(GetConfigValue("multipliers","torch", 1));
+        mult_flashlight            = Convert.ToDouble(GetConfigValue("multipliers","flashlight", 1));
+        mult_chainsaw              = Convert.ToDouble(GetConfigValue("multipliers","chainsaw", 1));
+        mult_jackhammer            = Convert.ToDouble(GetConfigValue("multipliers","jackhammer", 1));
+		mult_assaultrifle          = Convert.ToDouble(GetConfigValue("multipliers","assaultrifle", 1));
+		mult_beancangrenade        = Convert.ToDouble(GetConfigValue("multipliers","beancangrenade", 1));
+		mult_boltactionrifle       = Convert.ToDouble(GetConfigValue("multipliers","boltactionrifle", 1));
+		mult_boneclub              = Convert.ToDouble(GetConfigValue("multipliers","boneclub", 1.5));
+		mult_boneknife             = Convert.ToDouble(GetConfigValue("multipliers","boneknife", 1.5));
+		mult_candycaneclub         = Convert.ToDouble(GetConfigValue("multipliers","candycaneclub", 1.5));
+		mult_compoundbow           = Convert.ToDouble(GetConfigValue("multipliers","compoundbow", 1.25));
+		mult_crossbow              = Convert.ToDouble(GetConfigValue("multipliers","crossbow", 1.25));
+		mult_customsmg             = Convert.ToDouble(GetConfigValue("multipliers","customsmg", 1));
+		mult_doublebarrelshotgun   = Convert.ToDouble(GetConfigValue("multipliers","doublebarrelshotgun", 1));
+		mult_eokapistol            = Convert.ToDouble(GetConfigValue("multipliers","eokapistol", 1.25));
+		mult_f1grenade             = Convert.ToDouble(GetConfigValue("multipliers","f1grenade", 1));
+		mult_handmadefishingrod    = Convert.ToDouble(GetConfigValue("multipliers","handmadefishingrod", 2));
+		mult_huntingbow            = Convert.ToDouble(GetConfigValue("multipliers","huntingbow", 1.5));
+		mult_l96rifle              = Convert.ToDouble(GetConfigValue("multipliers","l96rifle", 1));
+		mult_lr300                 = Convert.ToDouble(GetConfigValue("multipliers","lr300", 1));
+		mult_longsword             = Convert.ToDouble(GetConfigValue("multipliers","longsword", 1.5));
+		mult_m249                  = Convert.ToDouble(GetConfigValue("multipliers","m249", 1));
+		mult_m92pistol             = Convert.ToDouble(GetConfigValue("multipliers","m92pistol", 1));
+		mult_mp5a4                 = Convert.ToDouble(GetConfigValue("multipliers","mp5a4", 1));
+		mult_mace                  = Convert.ToDouble(GetConfigValue("multipliers","mace", 1.5));
+		mult_machete               = Convert.ToDouble(GetConfigValue("multipliers","machete", 1.5));
+		mult_nailgun               = Convert.ToDouble(GetConfigValue("multipliers","nailgun", 1.25));
+		mult_pumpshotgun           = Convert.ToDouble(GetConfigValue("multipliers","pumpshotgun", 1));
+		mult_pythonrevolver        = Convert.ToDouble(GetConfigValue("multipliers","pythonrevolver", 1));
+		mult_revolver              = Convert.ToDouble(GetConfigValue("multipliers","revolver", 1));
+		mult_rocketlauncher        = Convert.ToDouble(GetConfigValue("multipliers","rocketlauncher", 1));
+		mult_salvagedcleaver       = Convert.ToDouble(GetConfigValue("multipliers","salvagedcleaver", 1));
+		mult_salvagedsword         = Convert.ToDouble(GetConfigValue("multipliers","salvagedsword", 1.5));
+		mult_satchelcharge         = Convert.ToDouble(GetConfigValue("multipliers","satchelcharge", 1));
+		mult_semiautomaticpistol   = Convert.ToDouble(GetConfigValue("multipliers","semiautomaticpistol", 1));
+		mult_semiautomaticrifle    = Convert.ToDouble(GetConfigValue("multipliers","semiautomaticrifle", 1));
+		mult_snowball              = Convert.ToDouble(GetConfigValue("multipliers","snowball", 2));
+		mult_spas12shotgun         = Convert.ToDouble(GetConfigValue("multipliers","spas12shotgun", 1));
+		mult_stonespear            = Convert.ToDouble(GetConfigValue("multipliers","stonespear", 1.25));
+		mult_thompson              = Convert.ToDouble(GetConfigValue("multipliers","thompson", 1));
+		mult_timedexplosivecharge  = Convert.ToDouble(GetConfigValue("multipliers","timedexplosivecharge", 1));
+		mult_waterpipeshotgun      = Convert.ToDouble(GetConfigValue("multipliers","waterpipeshotgun", 1));
+		mult_woodenspear           = Convert.ToDouble(GetConfigValue("multipliers","woodenspear", 1.75));
+		mult_VIPMultiplier         = Convert.ToDouble(GetConfigValue("multipliers","vipmultiplier", 2));
+		mult_HappyHourMultiplier   = Convert.ToDouble(GetConfigValue("multipliers","happyhourmultiplier", 2));
+		mult_distance_50 		   = Convert.ToDouble(GetConfigValue("multipliers","distance_50",  1.5));
+		mult_distance_100          = Convert.ToDouble(GetConfigValue("multipliers","distance_100", 2));
+		mult_distance_200          = Convert.ToDouble(GetConfigValue("multipliers","distance_200", 2.5));
+		mult_distance_300          = Convert.ToDouble(GetConfigValue("multipliers","distance_300", 3));
+		mult_distance_400          = Convert.ToDouble(GetConfigValue("multipliers","distance_400", 3.5));
+		rate_autoturret            = Convert.ToDouble(GetConfigValue("rates","autoturret", 10));
+		rate_barrel                = Convert.ToDouble(GetConfigValue("rates","barrel", 2));
+		rate_bear                  = Convert.ToDouble(GetConfigValue("rates","bear", 7));
+		rate_boar                  = Convert.ToDouble(GetConfigValue("rates","boar", 3));
+		rate_bradley               = Convert.ToDouble(GetConfigValue("rates","bradley", 50));
+		rate_cactus                = Convert.ToDouble(GetConfigValue("rates","cactus", 1));
+		rate_chicken               = Convert.ToDouble(GetConfigValue("rates","chicken", 1));
+		rate_chinook               = Convert.ToDouble(GetConfigValue("rates","chinook", 50));
+		rate_corn                  = Convert.ToDouble(GetConfigValue("rates","corn", 1));
+		rate_crate                 = Convert.ToDouble(GetConfigValue("rates","crate", 2));
+		rate_foodbox               = Convert.ToDouble(GetConfigValue("rates","foodbox", 1));
+		rate_giftbox               = Convert.ToDouble(GetConfigValue("rates","giftbox", 1));
+		rate_helicopter            = Convert.ToDouble(GetConfigValue("rates","helicopter", 75));
+		rate_hemp                  = Convert.ToDouble(GetConfigValue("rates","hemp", 1));
+		rate_horse                 = Convert.ToDouble(GetConfigValue("rates","horse", 2));
+		rate_player                = Convert.ToDouble(GetConfigValue("rates","player", 10));
+		rate_minecart              = Convert.ToDouble(GetConfigValue("rates","minecart", 2));
+		rate_mushrooms             = Convert.ToDouble(GetConfigValue("rates","mushrooms", 2));
+		rate_ore                   = Convert.ToDouble(GetConfigValue("rates","ore", 2));
+		rate_pumpkin               = Convert.ToDouble(GetConfigValue("rates","pumpkin", 1));
+		rate_murderer              = Convert.ToDouble(GetConfigValue("rates","murderer", 6));
+		rate_scientist             = Convert.ToDouble(GetConfigValue("rates","scientist", 8));
+		rate_stag                  = Convert.ToDouble(GetConfigValue("rates","stag", 2));
+		rate_stones                = Convert.ToDouble(GetConfigValue("rates","stones", 1));
+		rate_sulfur                = Convert.ToDouble(GetConfigValue("rates","sulfur", 1));
+		rate_supplycrate           = Convert.ToDouble(GetConfigValue("rates","supplycrate", 5));
+		rate_wolf                  = Convert.ToDouble(GetConfigValue("rates","wolf", 8));
+		rate_wood                  = Convert.ToDouble(GetConfigValue("rates","wood", 1));
+		rate_npckill               = Convert.ToDouble(GetConfigValue("rates","npckill", 8));
+		rate_activityreward        = Convert.ToDouble(GetConfigValue("rates","activityreward", 15));
+		rate_welcomemoney          = Convert.ToDouble(GetConfigValue("rates","welcomemoney", 50));
+
+		if  (HappyHour_BeginHour > HappyHour_EndHour)
+			happyhourcross24 = true;
+		else
+			happyhourcross24 = false;
+
+		CheckConfig();
+
+		if (_didConfigChange)
 		{
-			//str = new Strings
-			//{
-			//    CustomPermissionName = "null"
-			//};
-			rv = new Rewards_Version
-			{
-				Version = this.Version.ToString()
-			};
-			rr = new RewardRates
-			{
-				autoturret = 10,
-				barrel = 2,
-				bear = 7,
-				boar = 3,
-				bradley = 50,
-				cactus = 1,
-				chicken = 1,
-				chinook = 50,
-				corn = 1,
-				crate = 2,
-				foodbox = 1,
-				helicopter = 50,
-				hemp = 1,
-				horse = 2,
-				human = 10,
-				minecart = 2,
-				mushrooms = 2,
-				ore = 1,
-				pumpkin = 1,
-				murderer = 7,
-				scientist = 8,
-				stag = 2,
-				stones = 1,
-				supplysignal = 5,
-				wolf = 8,
-				wood = 1,
-				NPCKill_Reward = 8,
-				ActivityRewardRate_minutes = 30,
-				ActivityReward = 15,
-				WelcomeMoney = 50,
-				HappyHour_BeginHour = 17,
-				HappyHour_EndHour = 20
-			};
-			m = new Multipliers
-			{
-				AssaultRifle = 1.0,
-				BeancanGrenade = 1.0,
-				BoltActionRifle = 1.0,
-				BoneClub = 1.0,
-				BoneKnife = 1.0,
-				CandyCaneClub = 1.0,
-				CompoundBow = 1.0,
-				Crossbow = 1.0,
-				CustomSMG = 1.0,
-				DoubleBarrelShotgun = 1.0,
-				EokaPistol = 1.0,
-				F1Grenade = 1.0,
-				HandmadeFishingRod = 1.0,
-				HuntingBow = 1,
-				LR300 = 1.0,
-				Longsword = 1.5,
-				M249 = 1.0,
-				M92Pistol = 1.0,
-				MP5A4 = 1.0,
-				Mace = 1.5,
-				Machete = 1.5,
-				NailGun = 1.1,
-				PumpShotgun = 1,
-				PythonRevolver = 1.0,
-				Revolver = 1.0,
-				RocketLauncher = 1.0,
-				SalvagedCleaver = 1.5,
-				SalvagedSword = 1.5,
-				SatchelCharge = 1.0,
-				SemiAutomaticPistol = 1.0,
-				SemiAutomaticRifle = 1.0,
-				Snowball = 2.0,
-				Spas12Shotgun = 1.0,
-				StoneSpear = 1.5,
-				Thompson = 1.0,
-				TimedExplosiveCharge = 1.0,
-				WaterpipeShotgun = 1.0,
-				WoodenSpear = 1.2,
-				distance_50 = 1,
-				distance_100 = 1.0,
-				distance_200 = 1.25,
-				distance_300 = 1.5,
-				distance_400 = 2,
-				HappyHourMultiplier = 2,
-				VIPMultiplier = 2
-			};
-
-			o = new Options
-			{
-				ActivityReward_Enabled = true,
-				WelcomeMoney_Enabled = true,
-				UseEconomicsPlugin = true,
-				UseServerRewardsPlugin = false,
-				UseFriendsPlugin = true,
-				UseClansPlugin = true,
-				Economics_TakeMoneyFromVictim = false,
-				ServerRewards_TakeMoneyFromVictim = false,
-				WeaponMultiplier_Enabled = true,
-				DistanceMultiplier_Enabled = true,
-				PrintToConsole = true,
-				HappyHour_Enabled = true,
-				VIPMultiplier_Enabled = true,
-				NPCReward_Enabled = true
-			};
+			Puts("Configuration file updated.");
+			SaveConfig();
 		}
+	}
 
-		private void FixConfig()
+	void OnServerInitialized()
+	{
+		if (!permission.PermissionExists(permVIP)) permission.RegisterPermission(permVIP, this);
+		LoadDefaultMessages();
+
+		playerPrefs = dataFile.ReadObject<Dictionary<string, string>>();
+
+		helilasthitplayer = null;
+		chinooklasthitplayer = null;
+		bradleylasthitplayer = null;
+
+		LoadConfigValues();
+
+		#region Activity Check
+		if (ActivityReward_Enabled || HappyHour_Enabled)
 		{
-			try
-			{
-				Dictionary<string, object> temp;
-				Dictionary<string, object> temp2;
-				Dictionary<string, object> temp3;
-				Dictionary<string, object> temp4;
-				try { temp = (Dictionary<string, object>)Config["Rewards"]; } catch { Config["Rewards"] = rr; SaveConfig(); temp = (Dictionary<string, object>)Config["Rewards"]; }
-				try { temp2 = (Dictionary<string, object>)Config["Options"]; } catch { Config["Options"] = o; SaveConfig(); temp2 = (Dictionary<string, object>)Config["Options"]; }
-				try { temp3 = (Dictionary<string, object>)Config["Multipliers"]; } catch { Config["Multipliers"] = m; SaveConfig(); temp3 = (Dictionary<string, object>)Config["Multipliers"]; }
-				//try { temp4 = (Dictionary<string, object>)Config["Strings"]; } catch { Config["Strings"] = str; SaveConfig(); temp4 = (Dictionary<string, object>)Config["Strings"]; Puts(temp4["CustomPermissionName"].ToString()); }
-				foreach (var s in Rewards_itemList)
-				{
-					if (!temp.ContainsKey(s))
-					{
-						Config["Rewards", s] = rr.GetItemByString(s);
-						SaveConfig();
-					}
-				}
-				foreach (var s in Options_itemList)
-				{
-					if (!temp2.ContainsKey(s))
-					{
-						Config["Options", s] = o.GetItemByString(s);
-						SaveConfig();
-					}
-				}
-				foreach (var s in Multipliers_itemList)
-				{
-					if (!temp3.ContainsKey(s))
-					{
-						Config["Multipliers", s] = m.GetItemByString(s);
-						SaveConfig();
-					}
-				}
-				Config["Rewards_Version", "Version"] = this.Version.ToString();
-				SaveConfig();
-			}
-			catch (Exception ex)
-			{ Puts(ex.Message); Puts("Couldn't fix. Creating new config file"); Config.Clear(); LoadDefaultConfig(); Loadcfg(); }
+		  timecheck = timer.Once(60, CheckCurrentTime);
 		}
-
-		private void Loadcfg()
-		{
-			SetDefaultConfigValues();
-			try
-			{
-				Dictionary<string, object> temp = (Dictionary<string, object>)Config["Rewards_Version"];
-				if (this.Version.ToString() != temp["Version"].ToString())
-				{
-					Puts("Outdated config file. Fixing");
-					FixConfig();
-				}
-			}
-			catch (Exception e)
-			{
-				Puts("Outdated config file. Fixing");
-				FixConfig();
-			}
-			try
-			{
-				Dictionary<string, object> temp = (Dictionary<string, object>)Config["Rewards"];
-				rewardrates.ActivityReward = Convert.ToDouble(temp["ActivityReward"]);
-				rewardrates.ActivityRewardRate_minutes = Convert.ToDouble(temp["ActivityRewardRate_minutes"]);
-				rewardrates.autoturret = Convert.ToDouble(temp["autoturret"]);
-				rewardrates.barrel = Convert.ToDouble(temp["barrel"]);
-				rewardrates.foodbox = Convert.ToDouble(temp["foodbox"]);
-				rewardrates.crate = Convert.ToDouble(temp["crate"]);
-				rewardrates.supplysignal = Convert.ToDouble(temp["supplysignal"]);
-				rewardrates.minecart = Convert.ToDouble(temp["minecart"]);
-				rewardrates.bear = Convert.ToDouble(temp["bear"]);
-				rewardrates.boar = Convert.ToDouble(temp["boar"]);
-				rewardrates.chicken = Convert.ToDouble(temp["chicken"]);
-				rewardrates.corn = Convert.ToDouble(temp["corn"]);
-				rewardrates.helicopter = Convert.ToDouble(temp["helicopter"]);
-				rewardrates.chinook = Convert.ToDouble(temp["chinook"]);
-				rewardrates.murderer = Convert.ToDouble(temp["murderer"]);
-				rewardrates.scientist = Convert.ToDouble(temp["scientist"]);
-				rewardrates.bradley = Convert.ToDouble(temp["bradley"]);
-				rewardrates.hemp = Convert.ToDouble(temp["hemp"]);
-				rewardrates.horse = Convert.ToDouble(temp["horse"]);
-				rewardrates.human = Convert.ToDouble(temp["human"]);
-				rewardrates.mushrooms = Convert.ToDouble(temp["mushrooms"]);
-				rewardrates.cactus = Convert.ToDouble(temp["cactus"]);
-				rewardrates.ore = Convert.ToDouble(temp["ore"]);
-				rewardrates.pumpkin = Convert.ToDouble(temp["pumpkin"]);
-				rewardrates.stag = Convert.ToDouble(temp["stag"]);
-				rewardrates.stones = Convert.ToDouble(temp["stones"]);
-				rewardrates.WelcomeMoney = Convert.ToDouble(temp["WelcomeMoney"]);
-				rewardrates.wolf = Convert.ToDouble(temp["wolf"]);
-				rewardrates.wood = Convert.ToDouble(temp["wood"]);
-				rewardrates.HappyHour_BeginHour = Convert.ToDouble(temp["HappyHour_BeginHour"]);
-				rewardrates.HappyHour_EndHour = Convert.ToDouble(temp["HappyHour_EndHour"]);
-				rewardrates.NPCKill_Reward = Convert.ToDouble(temp["NPCKill_Reward"]);
-
-				Dictionary<string, object> temp2 = (Dictionary<string, object>)Config["Options"];
-				options.ActivityReward_Enabled = (bool)temp2["ActivityReward_Enabled"];
-				options.DistanceMultiplier_Enabled = (bool)temp2["DistanceMultiplier_Enabled"];
-				options.Economics_TakeMoneyFromVictim = (bool)temp2["Economics_TakeMoneyFromVictim"];
-				options.ServerRewards_TakeMoneyFromVictim = (bool)temp2["ServerRewards_TakeMoneyFromVictim"];
-				options.UseClansPlugin = (bool)temp2["UseClansPlugin"];
-				options.UseEconomicsPlugin = (bool)temp2["UseEconomicsPlugin"];
-				options.UseFriendsPlugin = (bool)temp2["UseFriendsPlugin"];
-				options.UseServerRewardsPlugin = (bool)temp2["UseServerRewardsPlugin"];
-				options.WeaponMultiplier_Enabled = (bool)temp2["WeaponMultiplier_Enabled"];
-				options.WelcomeMoney_Enabled = (bool)temp2["WelcomeMoney_Enabled"];
-				options.PrintToConsole = (bool)temp2["PrintToConsole"];
-				options.VIPMultiplier_Enabled = (bool)temp2["VIPMultiplier_Enabled"];
-				options.NPCReward_Enabled = (bool)temp2["NPCReward_Enabled"];
-				options.HappyHour_Enabled = (bool)temp2["HappyHour_Enabled"];
-
-				Dictionary<string, object> temp3 = (Dictionary<string, object>)Config["Multipliers"];
-				multipliers.AssaultRifle = Convert.ToDouble(temp3["AssaultRifle"]);
-				multipliers.BeancanGrenade = Convert.ToDouble(temp3["BeancanGrenade"]);
-				multipliers.BoltActionRifle = Convert.ToDouble(temp3["BoltActionRifle"]);
-				multipliers.BoneClub = Convert.ToDouble(temp3["BoneClub"]);
-				multipliers.BoneKnife = Convert.ToDouble(temp3["BoneKnife"]);
-				multipliers.CandyCaneClub = Convert.ToDouble(temp3["CandyCaneClub"]);
-				multipliers.CompoundBow = Convert.ToDouble(temp3["CompoundBow"]);
-				multipliers.Crossbow = Convert.ToDouble(temp3["Crossbow"]);
-				multipliers.CustomSMG = Convert.ToDouble(temp3["CustomSMG"]);
-				multipliers.DoubleBarrelShotgun = Convert.ToDouble(temp3["DoubleBarrelShotgun"]);
-				multipliers.EokaPistol = Convert.ToDouble(temp3["EokaPistol"]);
-				multipliers.F1Grenade = Convert.ToDouble(temp3["F1Grenade"]);
-				multipliers.HandmadeFishingRod = Convert.ToDouble(temp3["HandmadeFishingRod"]);
-				multipliers.HuntingBow = Convert.ToDouble(temp3["HuntingBow"]);
-				multipliers.LR300 = Convert.ToDouble(temp3["LR300"]);
-				multipliers.Longsword = Convert.ToDouble(temp3["Longsword"]);
-				multipliers.M249 = Convert.ToDouble(temp3["M249"]);
-				multipliers.M92Pistol = Convert.ToDouble(temp3["M92Pistol"]);
-				multipliers.MP5A4 = Convert.ToDouble(temp3["MP5A4"]);
-				multipliers.Mace = Convert.ToDouble(temp3["Mace"]);
-				multipliers.Machete = Convert.ToDouble(temp3["Machete"]);
-				multipliers.NailGun = Convert.ToDouble(temp3["NailGun"]);
-				multipliers.PumpShotgun = Convert.ToDouble(temp3["PumpShotgun"]);
-				multipliers.PythonRevolver = Convert.ToDouble(temp3["PythonRevolver"]);
-				multipliers.Revolver = Convert.ToDouble(temp3["Revolver"]);
-				multipliers.RocketLauncher = Convert.ToDouble(temp3["RocketLauncher"]);
-				multipliers.SalvagedCleaver = Convert.ToDouble(temp3["SalvagedCleaver"]);
-				multipliers.SalvagedSword = Convert.ToDouble(temp3["SalvagedSword"]);
-				multipliers.SatchelCharge = Convert.ToDouble(temp3["SatchelCharge"]);
-				multipliers.SemiAutomaticPistol = Convert.ToDouble(temp3["SemiAutomaticPistol"]);
-				multipliers.SemiAutomaticRifle = Convert.ToDouble(temp3["SemiAutomaticRifle"]);
-				multipliers.Snowball = Convert.ToDouble(temp3["Snowball"]);
-				multipliers.Spas12Shotgun = Convert.ToDouble(temp3["Spas12Shotgun"]);
-				multipliers.StoneSpear = Convert.ToDouble(temp3["StoneSpear"]);
-				multipliers.Thompson = Convert.ToDouble(temp3["Thompson"]);
-				multipliers.TimedExplosiveCharge = Convert.ToDouble(temp3["TimedExplosiveCharge"]);
-				multipliers.WaterpipeShotgun = Convert.ToDouble(temp3["WaterpipeShotgun"]);
-				multipliers.WoodenSpear = Convert.ToDouble(temp3["WoodenSpear"]);
-
-				multipliers.HappyHourMultiplier = Convert.ToDouble(temp3["HappyHourMultiplier"]);
-				multipliers.distance_50 = Convert.ToDouble(temp3["distance_50"]);
-				multipliers.distance_100 = Convert.ToDouble(temp3["distance_100"]);
-				multipliers.distance_200 = Convert.ToDouble(temp3["distance_200"]);
-				multipliers.distance_300 = Convert.ToDouble(temp3["distance_300"]);
-				multipliers.distance_400 = Convert.ToDouble(temp3["distance_400"]);
-				multipliers.VIPMultiplier = Convert.ToDouble(temp3["VIPMultiplier"]);
-
-				//Dictionary<string, object> temp4 = (Dictionary<string, object>)Config["Strings"];
-				//str.CustomPermissionName = temp4["CustomPermissionName"].ToString();
-				if (rewardrates.HappyHour_EndHour < rewardrates.HappyHour_BeginHour)
-					HappyHourCross24 = true;
-				else
-					HappyHourCross24 = false;
-			}
-			catch
-			{
-				FixConfig();
-				Loadcfg();
-			}
-		}
-
-		private void Init()
-		{
-			permission.RegisterPermission("rustrewards.admin", this);
-			permission.RegisterPermission("rustrewards.vip", this);
-			permission.RegisterPermission("rustrewards.showrewards", this);
-
-			playerPrefs = dataFile.ReadObject<Dictionary<string, string>>();
-
-			Loadcfg();
-			heliLastHitPlayer = null;
-			chinookLastHitPlayer = null;
-			bradleyLastHitPlayer = null;
-
-			#region Activity Check
-			if (options.ActivityReward_Enabled || options.HappyHour_Enabled)
-			{
-			  timeCheck = timer.Once(20, CheckCurrentTime);
-			}
-			#endregion
-		}
+		#endregion
+	}
 
 		private void CheckCurrentTime()
 		{
 			var gtime = TOD_Sky.Instance.Cycle.Hour;
-			if (options.ActivityReward_Enabled)
+			IPlayer ip = null;
+			if (ActivityReward_Enabled)
 			{
-				foreach (var p in BasePlayer.activePlayerList)
+				foreach (var p in BasePlayer.activePlayerList) //players.Connected)
 				{
-					if (Convert.ToDouble(p.secondsConnected) / 60 > rewardrates.ActivityRewardRate_minutes)
+					ip = p.IPlayer;
+					if (ip != null && (Convert.ToDouble(p.secondsConnected) / 60 > ActivityReward_Minutes))
 					{
-						if (LastReward.ContainsKey(p))
+						try
 						{
-							if (Convert.ToDouble(p.secondsConnected - LastReward[p]) / 60 > rewardrates.ActivityRewardRate_minutes)
+
+							if (Activity_Reward.ContainsKey(ip))
 							{
-								RewardPlayer(p, rewardrates.ActivityReward);
-								LastReward[p] = p.secondsConnected;
+								if (Convert.ToDouble(p.secondsConnected - Activity_Reward[ip]) / 60 > ActivityReward_Minutes)
+								{
+									GiveReward(ip, "ActivityReward", null, 1);
+									try
+									{
+										Activity_Reward[ip] = p.secondsConnected;
+									}
+									catch
+									{
+										Puts("Tell MSpeedie bug with adding to Activity_Reward");
+									}
+								}
+							}
+							else
+							{
+								try
+								{
+									Activity_Reward.Add(ip, p.secondsConnected);
+								}
+								catch
+								{}
 							}
 						}
-						else
+						catch
 						{
-							RewardPlayer(p, rewardrates.ActivityReward);
-							LastReward.Add(p, p.secondsConnected);
+							try
+							{
+								Activity_Reward.Add(ip, p.secondsConnected);
+							}
+							catch
+							{}
 						}
 					}
 				}
 			}
-			if (options.HappyHour_Enabled)
+			if (HappyHour_Enabled)
 			{
-				if (!HappyHourActive)
+				if (!happyhouractive)
 				{
-					if ((HappyHourCross24 == false &&   gtime >= rewardrates.HappyHour_BeginHour && gtime < rewardrates.HappyHour_EndHour) ||
-						(HappyHourCross24 == true  && ((gtime >= rewardrates.HappyHour_BeginHour && gtime < 24) || gtime < rewardrates.HappyHour_EndHour))
+					if ((happyhourcross24 == false &&   gtime >= HappyHour_BeginHour && gtime < HappyHour_EndHour) ||
+						(happyhourcross24 == true  && ((gtime >= HappyHour_BeginHour && gtime < 24) || gtime < HappyHour_EndHour))
 						)
 					{
-						HappyHourActive = true;
-						Puts("Happy hour(s) started.  Ending at " + rewardrates.HappyHour_EndHour);
+						happyhouractive = true;
+						if (PrintInConsole)
+							Puts("Happy hour(s) started.  Ending at " + HappyHour_EndHour);
 						BroadcastMessage(Lang("HappyHourStart"), Lang("Prefix"));
 					}
 				}
 				else
 				{
-					if ((HappyHourCross24 == false &&  gtime >= rewardrates.HappyHour_EndHour) ||
-						(HappyHourCross24 == true  && (gtime <  rewardrates.HappyHour_BeginHour && gtime >= rewardrates.HappyHour_EndHour))
+					if ((happyhourcross24 == false &&  gtime >= HappyHour_EndHour) ||
+						(happyhourcross24 == true  && (gtime <  HappyHour_BeginHour && gtime >= HappyHour_EndHour))
 						)
 					{
-						HappyHourActive = false;
-						Puts("Happy Hour(s) ended.  Next Happy Hour(s) starts at " + rewardrates.HappyHour_BeginHour);
+						happyhouractive = false;
+						if (PrintInConsole)
+							Puts("Happy Hour(s) ended.  Next Happy Hour(s) starts at " + HappyHour_BeginHour);
 						BroadcastMessage(Lang("HappyHourEnd"), Lang("Prefix"));
 					}
 				}
 			}
-			timeCheck = timer.Once(20, CheckCurrentTime);
+			timecheck = timer.Once(60, CheckCurrentTime);
 		}
 
 		private void OnPlayerInit(BasePlayer player)
 		{
-			if (options.WelcomeMoney_Enabled == false || player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer) return;
+			IPlayer iplayer = player.IPlayer;
+			if (WelcomeMoney_Enabled == false) return;
+			else if (iplayer == null || iplayer.Id == null) return;
 			else
 			{
-				if (!storedData.Players.Contains(player.UserIDString))
+				try
 				{
-					RewardPlayer(player, rewardrates.WelcomeMoney, 1, null, true);
-					storedData.Players.Add(player.UserIDString);
-					playerPrefs[player.UserIDString] = "true";
-					dataFile.WriteObject(playerPrefs);
+					if (playerPrefs.ContainsKey(iplayer.Id)) return;
+					else if (PrintInConsole)
+						Puts("New Player: " + iplayer.Name);
 				}
+				catch
+				{
+					if (PrintInConsole)
+						Puts("New Player: " + iplayer.Name);
+				}
+				playerPrefs.Add(iplayer.Id,"hko");
+				dataFile.WriteObject(playerPrefs);
+				GiveReward(iplayer, "welcomemoney", null, 1);
 			}
 		}
 
 		private void Unload()
 		{
-			if (timeCheck != null)
-				timeCheck.Destroy();
+			if (timecheck != null)
+				timecheck.Destroy();
 		}
 
 		string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-		bool HasPerm(BasePlayer p, string pe) => permission.UserHasPermission(p.userID.ToString(), pe);
+		bool HasPerm(IPlayer p, string pe) => p.HasPermission(pe);
 
-		private void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg, uid?.ToString() ?? "0");
 
-		private void BroadcastMessage(string msg, string prefix = null, object uid = null) => rust.BroadcastChat(prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg);
-
-		private void MessagePlayer(BasePlayer player, string msg, string prefix)
+		private void BroadcastMessage(string msg, string prefix = null, object uid = null)
 		{
-			string message = null;
-
-			if (player == null || msg == null || player.UserIDString == null || player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer) return;
-			else
-			try
-			{
-				playerPrefs.TryGetValue(player.UserIDString, out message);
-			}
-			catch
-			{
-				message = null;
-			}
-			if (message == null || (message != "true" && message != "false"))
-			{
-				message = "true";
-				playerPrefs[player.UserIDString] = message;
-				dataFile.WriteObject(playerPrefs);
-			}
-
-			if (message == "true")
-				SendChatMessage(player, msg, prefix);
+			rust.BroadcastChat(prefix == null ? msg : "<color=#CCBB00>" + prefix + "</color>: ", msg);
 		}
 
-		private void OnKillNPC(BasePlayer victim, HitInfo info)
+		private void MessagePlayer(IPlayer player, string msg, string prefix, string ptype)
 		{
-			if (options.NPCReward_Enabled && victim != null && (victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is NPCMurderer))
+			// we check ptype (prefence type) to see if the player wants to see these
+			string pref = "hko";
+
+			if (player == null || msg == null || player.Id == null) return;
+			else
 			{
-				if (info?.Initiator?.ToPlayer() == null) return;
-				double totalmultiplier = 1;
+				try
+				{
+					playerPrefs.TryGetValue(player.Id, out pref);
+				}
+				catch
+				{
+					pref = "hko";
+				}
+			}
 
-				if (options.DistanceMultiplier_Enabled || options.WeaponMultiplier_Enabled)
-					totalmultiplier = (options.DistanceMultiplier_Enabled ? multipliers.GetDistanceM(victim.Distance2D(info?.Initiator?.ToPlayer())) : 1) *
-				                      (options.WeaponMultiplier_Enabled ? multipliers.GetWeaponM(info?.Weapon?.GetItem()?.info?.displayName?.english) : 1) *
-				                      (HappyHourActive ? multipliers.HappyHourMultiplier : 1) *
-									  ((options.VIPMultiplier_Enabled && HasPerm(info?.Initiator?.ToPlayer(), "rewards.vip")) ? multipliers.VIPMultiplier : 1);
+			if (ptype ==  null || ptype == string.Empty || pref.Contains(ptype))
+			{
+				if (prefix == null)
+					player.Message( msg);
+				else
+					player.Message(String.Concat("<color=#CCBB00>" + prefix + "</color>: ",msg));
+			}
+		}
 
-				RewardPlayer(info?.Initiator?.ToPlayer(), rewardrates.NPCKill_Reward, totalmultiplier, victim.displayName);
+		private double GetDistance(float distance)
+		{
+			if (distance < 50) return 1;
+			else if (distance <  100) return mult_distance_50;
+			else if (distance <  200) return mult_distance_100;
+			else if (distance <  300) return mult_distance_200;
+			else if (distance <  400) return mult_distance_300;
+			else if (distance >= 400) return mult_distance_400;
+			else return 1;
+		}
+
+		private double GetWeapon(string weaponshortname)
+		{
+			string weaponname = Regex.Replace(weaponshortname,"_",".");
+					
+			if      (weaponname.Contains("ak47u"))                 return mult_assaultrifle;
+			else if (weaponname.Contains("axe.salvaged"))          return mult_axe_salvaged;
+			else if (weaponname.Contains("bolt.rifle"))            return mult_boltactionrifle;
+			else if (weaponname.Contains("bone.club"))             return mult_boneclub;
+			else if (weaponname.Contains("bow"))                   return mult_huntingbow;
+			else if (weaponname.Contains("butcherknife"))          return mult_butcherknife;
+			else if (weaponname.Contains("candy.cane"))            return mult_candycaneclub;
+			else if (weaponname.Contains("candycaneclub"))         return mult_candycaneclub;
+			else if (weaponname.Contains("chainsaw"))              return mult_chainsaw;
+			else if (weaponname.Contains("cleaver"))               return mult_salvagedcleaver;
+			else if (weaponname.Contains("compound"))              return mult_compoundbow;
+			else if (weaponname.Contains("crossbow"))              return mult_crossbow;
+			else if (weaponname.Contains("double.shotgun"))        return mult_doublebarrelshotgun;
+			else if (weaponname.Contains("eoka"))                  return mult_eokapistol;
+			else if (weaponname.Contains("explosive.satchel"))     return mult_satchelcharge;
+			else if (weaponname.Contains("explosive.timed"))       return mult_timedexplosivecharge;
+			else if (weaponname.Contains("fishingrod.handmade"))   return mult_handmadefishingrod;
+			else if (weaponname.Contains("flamethrower"))          return mult_flamethrower;
+			else if (weaponname.Contains("flashlight"))            return mult_flashlight;
+			else if (weaponname.Contains("grenade.beancan"))       return mult_beancangrenade;
+			else if (weaponname.Contains("grenade.f1"))            return mult_f1grenade;
+			else if (weaponname.Contains("hammer.salvaged"))       return mult_hammer_salvaged;
+			else if (weaponname.Contains("hatchet"))               return mult_hatchet;
+			else if (weaponname.Contains("icepick.salvaged"))      return mult_icepick_salvaged;
+			else if (weaponname.Contains("jackhammer"))            return mult_jackhammer;
+			else if (weaponname.Contains("knife.bone"))            return mult_boneknife;
+			else if (weaponname.Contains("l96"))                   return mult_l96rifle;
+			else if (weaponname.Contains("longsword"))             return mult_longsword;
+			else if (weaponname.Contains("lr300"))                 return mult_lr300;
+			else if (weaponname.Contains("m249"))                  return mult_m249;
+			else if (weaponname.Contains("m92"))                   return mult_m92pistol;
+			else if (weaponname.Contains("mace"))                  return mult_mace;
+			else if (weaponname.Contains("machete"))               return mult_machete;
+			else if (weaponname.Contains("mp5"))                   return mult_mp5a4;
+			else if (weaponname.Contains("nailgun"))               return mult_nailgun;
+			else if (weaponname.Contains("pickaxe"))               return mult_pickaxe;
+			else if (weaponname.Contains("pistol.revolver"))       return mult_revolver;
+			else if (weaponname.Contains("pistol.semiauto"))       return mult_semiautomaticpistol;
+			else if (weaponname.Contains("pitchfork"))             return mult_pitchfork;
+			else if (weaponname.Contains("python"))                return mult_pythonrevolver;
+			else if (weaponname.Contains("rocket"))                return mult_rocket;
+			else if (weaponname.Contains("rocket.launcher"))       return mult_rocketlauncher;
+			else if (weaponname.Contains("semi.auto.rifle"))       return mult_semiautomaticrifle;
+			else if (weaponname.Contains("shotgun.pump"))          return mult_pumpshotgun;
+			else if (weaponname.Contains("shotgun.waterpipe"))     return mult_waterpipeshotgun;
+			else if (weaponname.Contains("sickle"))                return mult_sickle;
+			else if (weaponname.Contains("smg"))                   return mult_customsmg;
+			else if (weaponname.Contains("snowball"))              return mult_snowball;
+			else if (weaponname.Contains("spas12"))                return mult_spas12shotgun;
+			else if (weaponname.Contains("spear.stone"))           return mult_stonespear;
+			else if (weaponname.Contains("spear.wood"))            return mult_woodenspear;
+			else if (weaponname.Contains("stone.pickaxe"))         return mult_stone_pickaxe;
+			else if (weaponname.Contains("stonehatchet"))          return mult_stonehatchet;
+			else if (weaponname.Contains("sword"))                 return mult_salvagedsword;
+			else if (weaponname.Contains("thompson"))              return mult_thompson;
+			else if (weaponname.Contains("torch"))                 return mult_torch;
+			else
+			{
+				Puts("Rust Rewards, Unknown weapon: " + weaponname);
+				return 1;
 			}
 		}
 
@@ -694,30 +747,32 @@ namespace Oxide.Plugins
 		{
 			if (!Economics && !ServerRewards) return;
 
-			BasePlayer player = entity.ToPlayer();
-			if (player == null && !player.IsConnected) return;
-			if (player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer) return;
+			IPlayer player = entity.ToPlayer().IPlayer;
+			if (player == null) return;
+			if (entity is BaseNpc || entity is NPCPlayerApex || entity is NPCPlayer || entity is NPCMurderer) return;
 
-			double rewardmoney = 0;
 			double totalmultiplier = 1;
 			string shortName = item.info.shortname;
 			string resource = null;
+			IPlayer ECEplayer = null;
 
 			if (shortName != null)
 			{
-				if (shortName.Contains(".ore"))
+				if (shortName.Contains("stone"))
 				{
-					rewardmoney = rewardrates.ore;
-					resource = "ore";
-				}
-				else if (shortName.Contains("stones"))
-				{
-					rewardmoney = rewardrates.stones;
 					resource = "stones";
 				}
+				else if (shortName.Contains("sulfur"))
+				{
+					resource = "sulfur";
+				}
+				else if (shortName.Contains(".ore"))
+				{
+					resource = "ore";
+				}
+
 				else if (shortName.Contains("cactus"))
 				{
-					rewardmoney = rewardrates.cactus;
 					resource = "cactus";
 				}
 				else if (dispenser.GetComponent<BaseEntity>() is TreeEntity ||
@@ -730,127 +785,169 @@ namespace Oxide.Plugins
 						 shortName.Contains("juniper") ||
 						 shortName.Contains("deadtree") ||
 						 shortName.Contains("log") ||
-						 shortName.Contains("tree_marking") ||
 						 shortName.Contains("palm"))
 				{
-					rewardmoney = rewardrates.wood;
 					resource = "wood";
 				}
+				//else
+				//	Puts("OED: " + resource + " : " + player.UserIDString);
 
-				if (resource != null && rewardmoney != 0 && dispenser.gameObject.ToBaseEntity().net.ID != null &&
-				    !EntityCollectionCache.ContainsKey(dispenser.gameObject.ToBaseEntity().net.ID))
+				if (resource != null && dispenser.gameObject.ToBaseEntity().net.ID != null)
 				{
-					EntityCollectionCache.Add(dispenser.gameObject.ToBaseEntity().net.ID, player);
-					//Puts (resource + " : " + player.UserIDString);
-					//totalmultiplier = ((HappyHourActive ? multipliers.HappyHourMultiplier : 1) * ((options.VIPMultiplier_Enabled && HasPerm(player, "rewards.vip")) ? multipliers.VIPMultiplier : 1);
-					//RewardPlayer(player, rewardmoney, totalmultiplier, Lang(resource, player.UserIDString));
+
+					if (EntityCollectionCache.ContainsKey(dispenser.gameObject.ToBaseEntity().net.ID))
+					{
+						if (EntityCollectionCache.TryGetValue(dispenser.gameObject.ToBaseEntity().net.ID, out ECEplayer))
+						{
+							if (ECEplayer == null || ECEplayer != player)
+								EntityCollectionCache[dispenser.gameObject.ToBaseEntity().net.ID] = player;
+						}
+					}
+					else
+						try
+						{
+							EntityCollectionCache.Add(dispenser.gameObject.ToBaseEntity().net.ID, player);
+						}
+						catch {}
+					// uncomment if you want per action reward
+					//Puts(resource + " : " + player.UserIDString);
+					//totalmultiplier = ((happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+					//GiveReward(player, resource, "h", totalmultiplier);
 				}
 			}
 		}
 
 		private void OnCollectiblePickup(Item item, BasePlayer player)
 		{
+			IPlayer iplayer = player.IPlayer;
 			if (!Economics && !ServerRewards) return;
-			if (player == null && !player.IsConnected) return;
+			if (!PickupReward_Enabled) return;
+			if (player == null) return;
 			if (player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer) return;
 
-			double rewardmoney = 0;
 			double totalmultiplier = 1;
 			string shortName = item.info.shortname;
 			string resource = null;
 
-			if (shortName.Contains("stones"))
+			if (shortName.Contains("stone"))
 			{
-				rewardmoney = rewardrates.stones;
 				resource = "stones";
+			}
+			else if (shortName.Contains("sulfur"))
+			{
+				resource = "sulfur";
 			}
 			else if (shortName.Contains(".ore"))
 			{
-				rewardmoney = rewardrates.ore;
 				resource = "ore";
 			}
 			else if (shortName.Contains("wood"))
 			{
-				rewardmoney = rewardrates.wood;
 				resource = "wood";
 			}
 			else if (shortName.Contains("mushroom"))
 			{
-				rewardmoney = rewardrates.mushrooms;
 				resource = "mushrooms";
 			}
 			else if (shortName.Contains("seed.corn"))
 			{
-				rewardmoney = rewardrates.corn;
 				resource = "corn";
 			}
 			else if (shortName.Contains("seed.hemp"))
 			{
-				rewardmoney = rewardrates.hemp;
 				resource = "hemp";
 			}
 			else if (shortName.Contains("seed.pumpkin"))
 			{
-				rewardmoney = rewardrates.pumpkin;
 				resource = "pumpkin";
 			}
+			//else
+			//	Puts("OEC shortName: " + shortName);
 
-			if (resource != null && rewardmoney != 0)
+			if (resource != null)
 			{
-				totalmultiplier = (HappyHourActive ? multipliers.HappyHourMultiplier : 1) * ((options.VIPMultiplier_Enabled && HasPerm(player, "rewards.vip")) ? multipliers.VIPMultiplier : 1);
-				RewardPlayer(player, rewardmoney, totalmultiplier, Lang(resource, player.UserIDString));
+				totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(iplayer, permVIP)) ? mult_VIPMultiplier : 1);
+				GiveReward(iplayer, resource, "h", totalmultiplier);
 			}
 		}
 
 		void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
 		{
+			BasePlayer bplayer = null;
+			IPlayer player = null;
+
 			if (entity == null || info.Initiator == null) return;
 			if (!(info.Initiator is BasePlayer) || info.Initiator is BaseNpc || info.Initiator is NPCPlayerApex || info.Initiator is NPCPlayer || info.Initiator is NPCMurderer) return;
 
-			// used to track who killed it. last hit wins ;-)
-			if (entity is BaseHelicopter && info.Initiator is BasePlayer)
-				heliLastHitPlayer = info.Initiator.ToPlayer();
+			try
+			{
+				bplayer = info.Initiator.ToPlayer();
+				if (bplayer == null) return;
+				player = bplayer.IPlayer;
+				if (player == null) return;
+			}
+			catch
+			{
+				return;
+			}
 
-			if (entity is CH47HelicopterAIController && info.Initiator is BasePlayer)
-				chinookLastHitPlayer = info.Initiator.ToPlayer();
+			// used to track who killed it. last hit wins ;-)  Note: does not support more than one at a time
+			// Puts(entity.ShortPrefabName);
 
-			if (entity is BradleyAPC && info.Initiator is BasePlayer)
-				bradleyLastHitPlayer = info.Initiator.ToPlayer();
+			if (entity is BaseHelicopter && player != null)
+				helilasthitplayer = player;
+			else if (entity is CH47HelicopterAIController && player != null)
+				chinooklasthitplayer = player;
+			else if (entity is BradleyAPC && player != null)
+				bradleylasthitplayer = player;
 		}
 
 		private void OnLootEntity(BasePlayer player, BaseEntity entity)
 		{
-			BasePlayer ECEplayer = null;
+			IPlayer iplayer = null;
+			IPlayer ECEplayer = null;
 
 			if (!Economics && !ServerRewards) return;
 			if (entity.net.ID == null || entity.ShortPrefabName == null) return;
-			if (player == null || !player.IsConnected || player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer) return;
-			if (!(entity.ShortPrefabName.Contains("crate_") || entity.ShortPrefabName.Contains("_crate") ||
-				 entity.ShortPrefabName.Contains("foodbox") || entity.ShortPrefabName.Contains("trash-pile") ||
-				 entity.ShortPrefabName.Contains("minecart") || entity.ShortPrefabName.Contains("supply")))
-				 return;
+
+			if (player == null || player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer) return;
+
+			try
+			{
+				iplayer = player.IPlayer;
+			}
+			catch
+			{
+				return;
+			}
+			if (iplayer == null) return;
+
+			if (!(entity.ShortPrefabName.Contains("crate") || entity.ShortPrefabName.Contains("foodbox") ||
+				  entity.ShortPrefabName.Contains("trash") || entity.ShortPrefabName.Contains("minecart") ||
+				  entity.ShortPrefabName.Contains("supply")))
+				  return;
 
 			if (EntityCollectionCache.ContainsKey(entity.net.ID))
 			{
 				if (EntityCollectionCache.TryGetValue(entity.net.ID, out ECEplayer))
-					{
-						if (ECEplayer == null || ECEplayer != player)
-							EntityCollectionCache[entity.net.ID] = player;
-					}
+				{
+					if (ECEplayer == null || ECEplayer != iplayer)
+						EntityCollectionCache[entity.net.ID] = iplayer;
+				}
 			}
 			else
 			{
-				EntityCollectionCache.Add(entity.net.ID, player);
+				EntityCollectionCache.Add(entity.net.ID, iplayer);
 			}
 		}
 
 		private void OnEntityKill(BaseNetworkable entity)
 		{
-			BasePlayer player = null;
-			double rewardmoney = 0;
+			IPlayer player = null;
 			double totalmultiplier = 1;
 			string resource = null;
 			bool   key_found = false;
+			string ptype = null;
 
 			//if (!(entity.ShortPrefabName.Contains("planner") ||
 			//	 entity.ShortPrefabName.Contains("junkpile") ||
@@ -865,10 +962,15 @@ namespace Oxide.Plugins
 			//	 entity.ShortPrefabName.Contains("rhib") ||
 			//	 entity.ShortPrefabName.Contains("fuel") ||
 			//	 entity.ShortPrefabName.Contains("foodbox") ||
+			//	 entity.ShortPrefabName.Contains("giftbox") ||
+			//	 entity.ShortPrefabName.Contains("standingdriver") ||
 			//	 entity.ShortPrefabName.Contains("crate") ||
 			//	 entity.ShortPrefabName.Contains("supply") ||
+			//	 entity.ShortPrefabName.Contains("oilfireball") ||
+			//	 entity.ShortPrefabName.Contains("rocket_basic") ||
 			//	 entity.ShortPrefabName.Contains("entity") ||
-			//	 entity.ShortPrefabName.Contains("weapon")))
+			//	 entity.ShortPrefabName.Contains("weapon")
+			//    ))
 			//{
 			//	Puts("OEK:" + entity.ShortPrefabName);
 			//}
@@ -888,24 +990,32 @@ namespace Oxide.Plugins
 					{
 					if (EntityCollectionCache.TryGetValue(entity.net.ID, out player))
 					{
-						if (player == null || !player.IsConnected) return;
-						else if (entity.ShortPrefabName.Contains("-ore") || entity.ShortPrefabName.Contains(".ore"))
+						if (player == null) return;
+						else if (entity.ShortPrefabName.Contains("stone"))
 						{
-							rewardmoney = rewardrates.ore;
-							resource = "ore";
-						}
-						else if (entity.ShortPrefabName.Contains("stones"))
-						{
-							rewardmoney = rewardrates.stones;
 							resource = "stones";
+							ptype    = "h";
+						}
+						else if (entity.ShortPrefabName.Contains("sulfur"))
+						{
+							resource = "sulfur";
+							ptype    = "h";
+						}
+						else if (entity.ShortPrefabName.Contains("-ore") || 
+								 entity.ShortPrefabName.Contains("ore_") || 
+								 entity.ShortPrefabName.Contains(".ore"))
+						{
+							resource = "ore";
+							ptype    = "h";
 						}
 						else if (entity.ShortPrefabName.Contains("cactus"))
 						{
-							rewardmoney = rewardrates.cactus;
 							resource = "cactus";
+							ptype    = "h";
 						}
 						else if (entity.ShortPrefabName.Contains("driftwood") ||
 								 entity.ShortPrefabName.Contains("douglas_fir") ||
+								 entity.ShortPrefabName.Contains("beech") ||
 								 entity.ShortPrefabName.Contains("birch") ||
 								 entity.ShortPrefabName.Contains("oak") ||
 								 entity.ShortPrefabName.Contains("pine") ||
@@ -914,34 +1024,41 @@ namespace Oxide.Plugins
 								 entity.ShortPrefabName.Contains("dead_log") ||
 								 entity.ShortPrefabName.Contains("palm"))
 						{
-							rewardmoney = rewardrates.wood;
 							resource = "wood";
+							ptype    = "h";
 						}
 						else if (entity.ShortPrefabName.Contains("minecart"))
 						{
-							rewardmoney = rewardrates.minecart;
 							resource = "minecart";
+							ptype    = "o";
 						}
 						else if (entity.ShortPrefabName.Contains("supply"))
 						{
-							rewardmoney = rewardrates.supplysignal;
-							resource = "supplysignal";
-						}
-						else if (entity.ShortPrefabName.Contains("crate_") || entity.ShortPrefabName.Contains("_crate"))
-						{
-							rewardmoney = rewardrates.crate;
-							resource = "crate";
+							resource = "supplycrate";
+							ptype    = "o";
 						}
 						else if (entity.ShortPrefabName.Contains("foodbox") || entity.ShortPrefabName.Contains("trash-pile"))
 						{
-							rewardmoney = rewardrates.foodbox;
 							resource = "foodbox";
+							ptype    = "o";
+						}
+						else if (entity.ShortPrefabName.Contains("giftbox"))
+						{
+							resource = "giftbox";
+							ptype    = "o";
+						}
+						else if (entity.ShortPrefabName.Contains("crate"))
+						{
+							resource = "crate";
+							ptype    = "o";
 						}
 
-						if (player != null && resource != null && rewardmoney != 0)
+						if (string.IsNullOrEmpty(ptype))
+							Puts("Tell MSPEEDIE no ptype for " + entity.ShortPrefabName);
+						if (player != null && resource != null)
 						{
-							totalmultiplier = (HappyHourActive ? multipliers.HappyHourMultiplier : 1) * ((options.VIPMultiplier_Enabled && HasPerm(player, "rewards.vip")) ? multipliers.VIPMultiplier : 1);
-							RewardPlayer(player, rewardmoney, totalmultiplier, Lang(resource, player.UserIDString));
+							totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+							GiveReward(player, resource, ptype, totalmultiplier);
 						}
 					}
 					}
@@ -957,739 +1074,484 @@ namespace Oxide.Plugins
 
 		private void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
 		{
-			var player = info?.Initiator?.ToPlayer();
-			double rewardmoney = 0;
 			double totalmultiplier = 1;
 			string resource = null;
+			BasePlayer bplayer = null;
+			IPlayer player = null;
+			string ptype = string.Empty;
+
+			if (victim == null || victim.name == null) return;
+			if (info == null || info.Initiator == null || !(info.Initiator is BasePlayer)) return;
+			if (info.Initiator is BaseNpc || info.Initiator is NPCPlayerApex || info.Initiator is NPCPlayer || info.Initiator is NPCMurderer) return;
+
+			try
+			{
+				bplayer = info.Initiator.ToPlayer();
+				if (bplayer != null)
+					player = bplayer.IPlayer;
+			}
+			catch
+			{
+				return;
+			}
 
 			if (!Economics && !ServerRewards) return;
-			if (victim == null) return;
+			if (victim is BuildingBlock || victim is Door ||
+			    victim.name.Contains("trap")   || victim.name.Contains("spike.floor") ||
+				victim.name.Contains("autoturret") ||
+				victim.name.Contains("external") || victim.name.Contains("hatch") ||
+				victim.name.Contains("cupboard.tool.deployed")
+				) return;
 
 			if (player == null)
 			{
 				// check is special case
-				if (victim is BaseHelicopter && heliLastHitPlayer != null)
+				if (victim is BaseHelicopter && helilasthitplayer != null)
 				{
-					player = heliLastHitPlayer;
-					heliLastHitPlayer = null;
+					player = helilasthitplayer;
+					helilasthitplayer = null;
 				}
-				if (victim is CH47HelicopterAIController && chinookLastHitPlayer != null)
+				if (victim is CH47HelicopterAIController && chinooklasthitplayer != null)
 				{
-					player = chinookLastHitPlayer;
-					chinookLastHitPlayer = null;
+					player = chinooklasthitplayer;
+					chinooklasthitplayer = null;
 				}
-				if (victim is BradleyAPC && bradleyLastHitPlayer != null)
+				if (victim is BradleyAPC && bradleylasthitplayer != null)
 				{
-					player = bradleyLastHitPlayer;
-					bradleyLastHitPlayer = null;
+					player = bradleylasthitplayer;
+					bradleylasthitplayer = null;
 				}
 				else
 					return;  // no one tracked as killing it
 			}
 
-			if (player == null || player.UserIDString == null || player.UserIDString == String.Empty || player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer)
+			if (player == null || player.Id == null || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer || info.Initiator.name.Contains("/npc/scientist/htn"))
 				return;
 
 			if (victim.name.Contains("servergibs") || victim.name.Contains("corpse")) return;  // no money for cleaning up the left over crash/corpse
 
 			if (victim.name.Contains("loot-barrel") || victim.name.Contains("loot_barrel") || victim.name.Contains("oil_barrel"))
 			{
-				rewardmoney = rewardrates.barrel;
 				resource = "barrel";
+				ptype = "o";
+
+			}
+			else if (victim.name.Contains("foodbox") || victim.name.Contains("trash-pile"))
+			{
+				resource = "foodbox";
+				ptype = "o";
+			}
+			else if (victim.name.Contains("giftbox"))
+			{
+				resource = "giftbox";
+				ptype = "o";
 			}
 			else if (victim.name.Contains("log"))
 			{
-				rewardmoney = rewardrates.wood;
 				resource = "wood";
+				ptype = "h";
 			}
 			else if (victim.name.Contains("assets/rust.ai/agents/") && !victim.name.Contains("corpse"))
 			{
+				ptype = "k";
 				if ( victim.name.Contains("stag"))
 				{
-					rewardmoney = rewardrates.stag;
 					resource = "stag";
 				}
 				else if (victim.name.Contains("boar"))
 				{
-					rewardmoney = rewardrates.boar;
 					resource = "boar";
 				}
 				else if (victim.name.Contains("horse"))
 				{
-					rewardmoney = rewardrates.horse;
 					resource = "horse";
 				}
 				else if (victim.name.Contains("bear"))
 				{
-					rewardmoney = rewardrates.bear;
 					resource = "bear";
 				}
 				else if (victim.name.Contains("wolf"))
 				{
-					rewardmoney = rewardrates.wolf;
 					resource = "wolf";
 				}
 				else if (victim.name.Contains("chicken"))
 				{
-					rewardmoney = rewardrates.chicken;
 					resource = "chicken";
 				}
 				else if (victim.name.Contains("zombie")) // lumped these in with Murderers
 				{
-					if (!options.NPCReward_Enabled)
+					if (!NPCReward_Enabled)
 						return;
-					rewardmoney = rewardrates.murderer;
 					resource = "murderer";
 				}
 				else
 				{
-					Puts("Tell Mals: OED missing animal: " + victim.name);
-				}
-			}
-			else if (victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is Scientist || victim is NPCMurderer)
-			{
-				if (!options.NPCReward_Enabled)
-					return;
-				if (victim is Scientist)
-				{
-					rewardmoney = rewardrates.scientist;
-					resource = "scientist";
-				}
-				else if (victim is NPCMurderer)
-				{
-					rewardmoney = rewardrates.murderer;
-					resource = "murderer";
-				}
-				else
-				{
-					rewardmoney = rewardrates.NPCKill_Reward;
-					resource = "npc";
-				}
-			}
-			else if (victim.ToPlayer() != null)
-			{
-				if (player.userID == victim.ToPlayer().userID)
-					return;
-				else
-				{
-					RewardForPlayerKill(player, victim.ToPlayer(), totalmultiplier);
-					return;
+					Puts("tell mspeedie: OED missing animal: " + victim.name);
 				}
 			}
 			else if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter.prefab"))
 			{
-				rewardmoney = rewardrates.helicopter;
 				resource = "helicopter";
+				ptype = "k";
 			}
 			else if (victim is BradleyAPC || victim.name.Contains("bradleyapc.prefab"))
 			{
-				rewardmoney = rewardrates.bradley;
 				resource = "bradley";
+				ptype = "k";
 			}
 			else if (victim is CH47HelicopterAIController || victim.name.Contains("ch47.prefab"))
 			{
-				rewardmoney = rewardrates.chinook;
 				resource = "chinook";
+				ptype = "k";
 			}
 			else if (victim.name == "assets/prefabs/npc/autoturret/autoturret_deployed.prefab")
 			{
-				rewardmoney = rewardrates.autoturret;
 				resource = "autoturret";
+				ptype = "k";
 			}
-
-			if ((resource != "barrel" && resource != "wood") && (options.DistanceMultiplier_Enabled || options.WeaponMultiplier_Enabled))
-				totalmultiplier = (options.DistanceMultiplier_Enabled ? multipliers.GetDistanceM(victim.Distance2D(player)) : 1) *
-			                      (options.WeaponMultiplier_Enabled ? multipliers.GetWeaponM(info?.Weapon?.GetItem()?.info?.displayName?.english) : 1) *
-			                      (HappyHourActive ? multipliers.HappyHourMultiplier : 1) * ((options.VIPMultiplier_Enabled && HasPerm(player, "rewards.vip")) ? multipliers.VIPMultiplier : 1);
-			else
-				totalmultiplier = (HappyHourActive ? multipliers.HappyHourMultiplier : 1) * ((options.VIPMultiplier_Enabled && HasPerm(player, "rewards.vip")) ? multipliers.VIPMultiplier : 1);
-
-			if (player != null && rewardmoney >= 0.01 && totalmultiplier > 0.01 && resource != null)
-				RewardPlayer(player, rewardmoney, totalmultiplier, Lang(resource, player.UserIDString));
-			else
-				Puts("Tell Mals to check: V/R/R/T/P: " + victim.name + " : " + resource + " : " + rewardmoney + " : " + totalmultiplier + " : " + player.displayName);
-
-		}
-
-		private void RewardPlayer(BasePlayer player, double amount, double multiplier = 1, string reason = null, bool isWelcomeReward = false)
-		{
-			// safety checks
-			if (player == null || amount == null || multiplier == null || amount < 0.01  || multiplier < 0.001 || player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer) return;
-
-			// if the IsConnected does not work then use these
-			if (player.IsConnected)
+			else if (victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is Scientist || victim is NPCMurderer ||
+				     victim.name.Contains("scarecrow.prefab") || victim.name.Contains("/npc/scientist/htn"))
 			{
-				amount = amount * multiplier;
-				//  these use to be both if but it seems odd to me to pay in two currencies at the same rate
-				if (options.UseEconomicsPlugin)
+				ptype = "k";
+				if (!NPCReward_Enabled)
+					return;
+				else if (victim is Scientist)
 				{
-					Economics?.Call("Deposit", player.UserIDString, amount);
+					resource = "scientist";
 				}
-				else if (options.UseServerRewardsPlugin)
+				else if (victim is NPCMurderer || victim.name.Contains("scarecrow.prefab"))
 				{
-					amount = Math.Round(amount,0);
-					ServerRewards?.Call("AddPoints", player.userID, (int)amount);
-				}
-
-				if (isWelcomeReward)
-				{
-					MessagePlayer(player, Lang("WelcomeReward", player.UserIDString, amount.ToString("C", CurrencyCulture)), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " as a welcome reward", this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " as a welcome reward");
-				}
-				else if (reason == Lang("ore", player.UserIDString) ||
-						 reason == Lang("wood", player.UserIDString) ||
-						 reason == Lang("stones", player.UserIDString) ||
-						 reason == Lang("corn", player.UserIDString) ||
-						 reason == Lang("hemp", player.UserIDString) ||
-						 reason == Lang("mushrooms", player.UserIDString) ||
-						 reason == Lang("cactus", player.UserIDString) ||
-						 reason == Lang("pumpkin", player.UserIDString)
-						 )
-				{
-					MessagePlayer(player, Lang("CollectReward", player.UserIDString, amount.ToString("C", CurrencyCulture), reason), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " for " + (reason == null ? "activity" : "collecting " + reason), this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "collecting " + reason));
-				}
-				else if (reason == Lang("barrel", player.UserIDString))
-				{
-					MessagePlayer(player, Lang("BarrelReward", player.UserIDString, amount.ToString("C", CurrencyCulture), reason), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " for " + (reason == null ? "activity" : "breaking " + reason), this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "breaking " + reason));
-				}
-				else if (reason == Lang("crate", player.UserIDString))
-				{
-					MessagePlayer(player, Lang("CrateReward", player.UserIDString, amount.ToString("C", CurrencyCulture), reason), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " for " + (reason == null ? "activity" : "opening " + reason), this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "opening " + reason));
-				}
-				else if (reason == Lang("foodbox", player.UserIDString))
-				{
-					MessagePlayer(player, Lang("FoodBoxReward", player.UserIDString, amount.ToString("C", CurrencyCulture), reason), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " for " + (reason == null ? "activity" : "opening " + reason), this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "opening " + reason));
-				}
-				else if (reason == Lang("supplysignal", player.UserIDString))
-				{
-					MessagePlayer(player, Lang("SupplySignalReward", player.UserIDString, amount.ToString("C", CurrencyCulture), reason), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " for " + (reason == null ? "activity" : "opening " + reason), this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "opening " + reason));
-				}
-				else if (reason == Lang("minecart", player.UserIDString))
-				{
-					MessagePlayer(player, Lang("MineCartReward", player.UserIDString, amount.ToString("C", CurrencyCulture), reason), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " for " + (reason == null ? "activity" : "opening " + reason), this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "opening " + reason));
+					resource = "murderer";
 				}
 				else
 				{
-					MessagePlayer(player, reason == null ? Lang("ActivityReward", player.UserIDString, amount.ToString("C", CurrencyCulture)) : Lang("KillReward", player.UserIDString, amount, reason), Lang("Prefix"));
-					LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount.ToString("C", CurrencyCulture) + " for " + (reason == null ? "activity" : "killing " + reason), this);
-					if (options.PrintToConsole)
-						Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason));
+					resource = "npc";
 				}
 			}
+			if (resource == null && victim.ToPlayer() != null && victim.ToPlayer().userID != null)
+			{
+				ptype = "k";
+				if (info?.Initiator?.ToPlayer().userID == victim.ToPlayer().userID)
+					return;  // killed themselves
+				else
+					resource = "player";
+			}
+
+			if (!(resource == "barrel" ||resource == "wood" || resource.Contains("box")) &&
+				(DistanceMultiplier_Enabled || WeaponMultiplier_Enabled)
+				)
+			{
+				var prefab = info.WeaponPrefab?.ShortPrefabName;
+				// Puts(prefab + " GetWeapon: " + GetWeapon(prefab) + " Distance: " + GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())));
+				totalmultiplier = (DistanceMultiplier_Enabled ? GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())) : 1) *
+									(WeaponMultiplier_Enabled ? GetWeapon(prefab) : 1) *
+									(happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+			}
+			else
+			{
+				totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+			}
+
+			if (resource == "player")
+			{
+				ptype = "k";
+				if (player != null && victim.ToPlayer() != null && totalmultiplier > 0.01)
+					RewardForPlayerKill(player, victim.ToPlayer(), totalmultiplier);
+			}
+			else if (player != null && resource != null && totalmultiplier > 0.01)
+				GiveReward(player, resource, ptype, totalmultiplier);
+			else
+				Puts("tell mspeedie to check: V/R/R/T/P: " + victim.name + " : " + resource + " : " + totalmultiplier + " : " + player.Name);
+
 		}
 
-		private void RewardForPlayerKill(BasePlayer player, BasePlayer victim, double multiplier = 1)
+		private void GiveReward(IPlayer player, string reason, string ptype, double multiplier = 1)
+		{
+			double amount = 0;
+			// safety checks
+			if (player == null || reason == null || reason == String.Empty ||
+			    multiplier == null || multiplier < 0.001 ||
+				player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer)
+				return;
+
+			if (reason.Contains("barrel"))
+				amount = rate_barrel;
+			else if (reason.Contains("supplycrate"))
+				amount = rate_supplycrate;
+			else if (reason.Contains("foodbox"))
+				amount = rate_foodbox;
+			else if (reason.Contains("giftbox"))
+				amount = rate_giftbox;
+			else if (reason.Contains("minecart"))
+				amount = rate_minecart;
+			else if (reason.Contains("crate"))
+				amount = rate_crate;
+			else if (reason == "player")
+				amount = rate_player;
+			else if (reason == "bear")
+				amount = rate_bear;
+			else if (reason == "wolf")
+				amount = rate_wolf;
+			else if (reason == "chicken")
+				amount = rate_chicken;
+			else if (reason == "horse")
+				amount = rate_horse;
+			else if (reason == "boar")
+				amount = rate_boar;
+			else if (reason == "stag")
+				amount = rate_stag;
+			else if (reason.Contains("cactus"))
+				amount = rate_cactus;
+			else if (reason == "wood")
+				amount = rate_wood;
+			else if (reason == "stones")
+				amount = rate_stones;
+			else if (reason == "sulfur")
+				amount = rate_sulfur;
+			else if (reason == "ore")
+				amount = rate_ore;
+			else if (reason == "corn")
+				amount = rate_corn;
+			else if (reason == "hemp")
+				amount = rate_hemp;
+			else if (reason == "mushrooms")
+				amount = rate_mushrooms;
+			else if (reason == "pumpkin")
+				amount = rate_pumpkin;
+			else if (reason == "helicopter")
+				amount = rate_helicopter;
+			else if (reason == "chinook")
+				amount = rate_chinook;
+			else if (reason == "murderer")
+				amount = rate_murderer;
+			else if (reason == "scientist")
+				amount = rate_scientist;
+			else if (reason == "bradley")
+				amount = rate_bradley;
+			else if (reason == "autoturret")
+				amount = rate_autoturret;
+			else if (reason == "ActivityReward")
+				amount = rate_activityreward;
+			else if (reason == "WelcomeMoney")
+				amount = rate_welcomemoney;
+			else if (reason == "npc")
+				amount = rate_npckill;
+			else
+			{
+				amount = 0.0;
+				Puts("Rust Rewards Unknown reason:" + reason);
+			}
+
+			// no reward nothing to process
+			if (amount == 0)
+				return;
+
+			// make sure multipler is not zero
+			if (multiplier == 0)
+			{
+				Puts("Rust Rewards Multipler should not be zero. reason:" + reason);
+				return;
+			}
+
+			amount = amount * multiplier;
+			// make sure net amount is not zero
+			if (amount == 0)
+			{
+				Puts("Rust Rewards  net amount (amount * multipler) should not be zero. reason:" + reason);
+				return;
+			}
+
+			//  these use to be both if but it seems odd to me to pay in two currencies at the same rate
+			if (UseEconomicsPlugin)
+			{
+				if (amount > 0)
+					Economics?.Call("Deposit", player.Id, amount);
+			}
+			else if (UseServerRewardsPlugin)
+			{
+				amount = Math.Round(amount,0);
+				if (amount > 0)
+					ServerRewards?.Call("AddPoints", player.Id, (int)amount);
+				else
+				{
+					Puts("Rust Rewards Amount Zero! " + reason);
+					return; // too small an amount to process
+				}
+			}
+			if (ShowcurrencySymbol)
+				MessagePlayer(player, Lang(reason, player.Id, amount.ToString("C", CurrencyCulture)), Lang("Prefix"), ptype);
+			else
+				MessagePlayer(player, Lang(reason, player.Id, amount), Lang("Prefix"), ptype);
+
+			if (DoLogging)
+			{
+				if (ShowcurrencySymbol)
+					LogToFile(Name, $"[{DateTime.Now}] " + player.Name + " got " + amount.ToString("C", CurrencyCulture) + " for " + reason, this);
+				else
+					LogToFile(Name, $"[{DateTime.Now}] " + player.Name + " got " + amount + " for " + reason, this);
+			}
+			if (PrintInConsole)
+				Puts(player.Name + " got " + amount + " for " + reason);
+		}
+
+		private void RewardForPlayerKill(IPlayer player, BasePlayer victim, double multiplier = 1)
 		{
 
+			double amount = 0;
+			bool success = false;
+			bool isFriend = false;
+
 			// safety checks
-			if (player == null || victim == null || multiplier == null || rewardrates.human == null || multiplier < 0.001 || rewardrates.human <= 0.01 ||
+			if (player == null || victim == null || multiplier < 0.001 || rate_player <= 0.01 ||
 			    player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer ||
 			    victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is NPCMurderer) return;
 
-			if (player.IsConnected)
+
+			amount = rate_player * multiplier;
+
+			if (friendsloaded)
+				isFriend = (bool)Friends?.CallHook("HasFriend", player.Id, victim.userID);
+			if (!isFriend && clansloaded)
 			{
-				bool success = true;
-				bool isFriend = false;
-				if (IsFriendsLoaded)
-					isFriend = (bool)Friends?.CallHook("HasFriend", player.userID, victim.userID);
-				if (!isFriend && IsClansLoaded)
+				string pclan = (string)Clans?.CallHook("GetClanOf", player);
+				string vclan = (string)Clans?.CallHook("GetClanOf", victim);
+				if (pclan == vclan)
+					isFriend = true;
+			}
+			if (!isFriend)
+			{
+				if (UseEconomicsPlugin && economicsloaded) // Economics
 				{
-					string pclan = (string)Clans?.CallHook("GetClanOf", player);
-					string vclan = (string)Clans?.CallHook("GetClanOf", victim);
-					if (pclan == vclan)
-						isFriend = true;
-				}
-				if (!isFriend)
-				{
-					if (IsEconomicsLoaded) // Economics
+					if (TakeMoneyfromVictim)
 					{
-						if (options.Economics_TakeMoneyFromVictim)
+						if (!(bool)Economics?.Call("Transfer", victim.UserIDString, player.Id, amount))
 						{
-							if (!(bool)Economics?.Call("Transfer", victim.UserIDString, player.UserIDString, rewardrates.human * multiplier))
-							{
-								MessagePlayer(player, Lang("VictimNoMoney", player.UserIDString, victim.displayName), Lang("Prefix"));
-								success = false;
-							}
+							MessagePlayer(player, Lang("VictimNoMoney", player.Id, victim.displayName), Lang("Prefix"), "k");
+							success = false;
 						}
 						else
-							Economics?.Call("Deposit", player.UserIDString, rewardrates.human * multiplier);
+							success = true;
 					}
-					if (IsServerRewardsLoaded) //ServerRewards
+					else
 					{
-						if (options.ServerRewards_TakeMoneyFromVictim)
-							ServerRewards?.Call("TakePoints", new object[] { victim.userID, rewardrates.human * multiplier });
-						ServerRewards?.Call("AddPoints", player.userID, (int)(rewardrates.human * multiplier));
+						Economics?.Call("Deposit", player.Id, amount);
 						success = true;
 					}
-					if (success) //Send message if transaction was successful
-					{
-						MessagePlayer(player, Lang("KillReward", player.UserIDString, rewardrates.human * multiplier, victim.displayName), Lang("Prefix"));
-						LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName, this);
-						if (options.PrintToConsole)
-							Puts(player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName);
-					}
 				}
-			}
-		}
-
-		[ConsoleCommand("setrustrewards")]
-		private void setreward(ConsoleSystem.Arg arg)
-		{
-			if (arg.IsAdmin)
-			{
-				try
+				if (UseServerRewardsPlugin && serverrewardsloaded) //ServerRewards
 				{
-					var args = arg.Args;
-					Config["Rewards", args[0]] = Convert.ToDouble(args[1]);
-					SaveConfig();
-					try
-					{
-						Loadcfg();
-					}
-					catch
-					{
-						FixConfig();
-					}
-					arg.ReplyWith("Reward set");
+					if (TakeMoneyfromVictim)
+						ServerRewards?.Call("TakePoints", new object[] { victim.userID, rate_player * multiplier });
+					ServerRewards?.Call("AddPoints", player.Id, (int)(rate_player * multiplier));
+					success = true;
 				}
-				catch
+
+				if (success) //Send message if transaction was successful
 				{
-					arg.ReplyWith("Varaibles you can set: 'human', 'horse', 'wolf', 'chicken', 'bear', 'boar', 'stag', 'helicopter', 'chinook', 'bradley', 'autoturret', 'ActivityReward' 'ActivityRewardRate_minutes', 'WelcomeMoney'");
+
+					if (ShowcurrencySymbol)
+						MessagePlayer(player, Lang("player", player.Id, amount.ToString("C", CurrencyCulture), victim.displayName), Lang("Prefix") , "k");
+					else
+						MessagePlayer(player, Lang("player", player.Id, amount, victim.displayName), Lang("Prefix"), "k");
+					if (DoLogging)
+						LogToFile(Name, $"[{DateTime.Now}] " + player.Name + " got " + amount + " for killing " + victim.displayName, this);
+					if (PrintInConsole)
+						Puts(player.Name + " got " + amount + " for killing " + victim.displayName);
 				}
 			}
+
 		}
-
-		[ConsoleCommand("showrustrewards")]
-		private void showrewards(ConsoleSystem.Arg arg)
+		#region Commands
+		[ChatCommand("rrm")]
+		void ChatCommandRRM(BasePlayer player, string command, string[] args)
 		{
-			if (arg.IsAdmin)
-				arg.ReplyWith(String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, chinook = {8}, bradley = {9}, autoturret = {10} Activity Reward Rate (minutes) = {11}, Activity Reward = {12}, WelcomeMoney = {13}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.chinook, rewardrates.bradley, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney));
-		}
+			IPlayer iplayer = player.IPlayer;
 
-		[ChatCommand("rustrewardsmsg")]
-		private void ChatCommand(BasePlayer player, string command, string[] args)
-		{
-			string message = "false";
+			bool   pstate = true;
+			string pref = "hko";   // Havest, Kill, and Open
+			string pstateString = null;
+			string ptype = null;
+			string ptypeString = null;
 
-			try
+			if (args.Length < 2)
 			{
-			playerPrefs.TryGetValue(player.UserIDString, out message);
-			}
-			catch
-			{
-				message = "false";
-			}
-
-			if (message == "true")
-			{
-				message = "false";
-				playerPrefs[player.UserIDString] = message;
-				dataFile.WriteObject(playerPrefs);
-				SendChatMessage(player, Lang("MsgOff", player.UserIDString), Lang("Prefix"));
+				MessagePlayer(iplayer, Lang("rrm syntax", iplayer.Id), Lang("Prefix"), null);
+				return;
 			}
 			else
 			{
-				message = "true";
-				playerPrefs[player.UserIDString] = message;
-				dataFile.WriteObject(playerPrefs);
-				SendChatMessage(player, Lang("MsgOn", player.UserIDString), Lang("Prefix"));
-			}
-		}
-
-		[ChatCommand("setrustrewards")]
-		private void setrewardCommand(BasePlayer player, string command, string[] args)
-		{
-			if (HasPerm(player, "rewards.admin"))
-			{
-				try
+				if (string.IsNullOrEmpty(args[0]) || args[0].Length > 1)
 				{
-					Config["Rewards", args[0]] = Convert.ToDouble(args[1]);
-					SaveConfig();
-					try
-					{
-						Loadcfg();
-					}
-					catch
-					{
-						FixConfig();
-					}
-					MessagePlayer(player, Lang("RewardSet", player.UserIDString), Lang("Prefix"));
-					if (rewardrates.HappyHour_EndHour < rewardrates.HappyHour_BeginHour)
-						HappyHourCross24 = true;
+					MessagePlayer(iplayer, Lang("rrm type", iplayer.Id), Lang("Prefix"), null);
+					return;
+				}
+
+				if (string.IsNullOrEmpty(args[1]) || args[1].Length < 2)
+				{
+					MessagePlayer(iplayer, Lang("rrm state", iplayer.Id), Lang("Prefix"), null);
+					return;
+				}
+
+				ptype  = args[0].ToLower().Substring(0,1);
+				if (ptype != "h" && ptype != "k" && ptype != "o")
+				{
+					MessagePlayer(iplayer, Lang("rrm type", iplayer.Id), Lang("Prefix"), null);
+					return;
+				}
+
+				pstateString = args[1].ToLower().Substring(0,2);
+				if (pstateString != "on" && pstateString != "of" && pstateString != "tr" && pstateString != "fa" && pstateString != "ye" && pstateString != "no")
+				{
+					MessagePlayer(iplayer, Lang("rrm state", iplayer.Id), Lang("Prefix"), null);
+					return;
+				}
+				else
+				{
+					if (pstateString == "of" || pstateString == "fa" || pstateString == "no")
+						pstate = false;
 					else
-						HappyHourCross24 = false;
-				}
-				catch
-				{
-					MessagePlayer(player, Lang("SetRewards", player.UserIDString) + " 'human', 'horse', 'wolf', 'chicken', 'bear', 'boar', 'stag', 'helicopter', 'chinook', 'bradley', 'autoturret', 'ActivityReward', 'ActivityRewardRate_minutes', 'WelcomeMoney'", Lang("Prefix"));
+						pstate = true;
 				}
 			}
-		}
-
-		[ChatCommand("showrustrewards")]
-		private void showrewardsCommand(BasePlayer player, string command, string[] args)
-		{
-			if (HasPerm(player, "rewards.showrewards"))
-				MessagePlayer(player, String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, chinook = {8}, bradley = {9}, autoturret = {10} Activity Reward Rate (minutes) = {11}, Activity Reward = {12}, WelcomeMoney = {13}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.chinook, rewardrates.bradley, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney), Lang("Prefix"));
-		}
-
-		class StoredData
-		{
-			public HashSet<string> Players = new HashSet<string>();
-			public StoredData() { }
-		}
-
-		class RewardRates
-		{
-			public double autoturret{ get; set; }
-			public double barrel{ get; set; }
-			public double bear{ get; set; }
-			public double boar{ get; set; }
-			public double bradley{ get; set; }
-			public double cactus{ get; set; }
-			public double chicken{ get; set; }
-			public double chinook{ get; set; }
-			public double corn{ get; set; }
-			public double crate{ get; set; }
-			public double foodbox{ get; set; }
-			public double helicopter{ get; set; }
-			public double hemp{ get; set; }
-			public double horse{ get; set; }
-			public double human{ get; set; }
-			public double minecart{ get; set; }
-			public double mushrooms{ get; set; }
-			public double ore{ get; set; }
-			public double pumpkin{ get; set; }
-			public double murderer{ get; set; }
-			public double scientist{ get; set; }
-			public double stag{ get; set; }
-			public double stones{ get; set; }
-			public double supplysignal{ get; set; }
-			public double wolf{ get; set; }
-			public double wood{ get; set; }
-			public double NPCKill_Reward{ get; set; }
-			public double ActivityRewardRate_minutes{ get; set; }
-			public double ActivityReward{ get; set; }
-			public double WelcomeMoney{ get; set; }
-			public double HappyHour_BeginHour{ get; set; }
-			public double HappyHour_EndHour{ get; set; }
-			public double GetItemByString(string itemName)
+			
+			try
 			{
-				if (itemName.StartsWith("loot-barrel") || itemName.StartsWith("loot_barrel") || itemName.StartsWith("oil-barrel"))
-					return this.barrel;
-				if (itemName.Contains("crate_") || itemName.Contains("_crate"))
-					return this.crate;
-				if (itemName.Contains("foodbox"))
-					return this.foodbox;
-				if (itemName.Contains("supplysignal"))
-					return this.supplysignal;
-				if (itemName.Contains("minecart"))
-					return this.minecart;
-				if (itemName == "human")
-					return this.human;
-				else if (itemName == "bear")
-					return this.bear;
-				else if (itemName == "wolf")
-					return this.wolf;
-				else if (itemName == "chicken")
-					return this.chicken;
-				else if (itemName == "horse")
-					return this.horse;
-				else if (itemName == "boar")
-					return this.boar;
-				else if (itemName == "stag")
-					return this.stag;
-				else if (itemName.Contains("cactus"))
-					return this.cactus;
-				else if (itemName == "ore")
-					return this.ore;
-				else if (itemName == "wood")
-					return this.wood;
-				else if (itemName == "stones")
-					return this.stones;
-				else if (itemName == "corn")
-					return this.corn;
-				else if (itemName == "hemp")
-					return this.hemp;
-				else if (itemName == "mushrooms")
-					return this.mushrooms;
-				else if (itemName == "pumpkin")
-					return this.pumpkin;
-				else if (itemName == "helicopter")
-					return this.helicopter;
-				else if (itemName == "chinook")
-					return this.chinook;
-				else if (itemName == "murderer")
-					return this.murderer;
-				else if (itemName == "scientist")
-					return this.scientist;
-				else if (itemName == "bradley")
-					return this.bradley;
-				else if (itemName == "autoturret")
-					return this.autoturret;
-				else if (itemName == "ActivityRewardRate_minutes")
-					return this.ActivityRewardRate_minutes;
-				else if (itemName == "ActivityReward")
-					return this.ActivityReward;
-				else if (itemName == "WelcomeMoney")
-					return this.WelcomeMoney;
-				else if (itemName == "HappyHour_BeginHour")
-					return this.HappyHour_BeginHour;
-				else if (itemName == "HappyHour_EndHour")
-					return this.HappyHour_EndHour;
-				else if (itemName == "NPCKill_Reward")
-					return this.NPCKill_Reward;
-				else
-					return 0;
+			playerPrefs.TryGetValue(iplayer.Id, out pref);
 			}
-		}
-
-		class Multipliers
-		{
-			public double AssaultRifle{ get; set; }
-			public double BeancanGrenade{ get; set; }
-			public double BoltActionRifle{ get; set; }
-			public double BoneClub{ get; set; }
-			public double BoneKnife{ get; set; }
-			public double CandyCaneClub{ get; set; }
-			public double CompoundBow{ get; set; }
-			public double Crossbow{ get; set; }
-			public double CustomSMG{ get; set; }
-			public double DoubleBarrelShotgun{ get; set; }
-			public double EokaPistol{ get; set; }
-			public double F1Grenade{ get; set; }
-			public double HandmadeFishingRod{ get; set; }
-			public double HuntingBow{ get; set; }
-			public double LR300{ get; set; }
-			public double Longsword{ get; set; }
-			public double M249{ get; set; }
-			public double M92Pistol{ get; set; }
-			public double MP5A4{ get; set; }
-			public double Mace{ get; set; }
-			public double Machete{ get; set; }
-			public double NailGun{ get; set; }
-			public double PumpShotgun{ get; set; }
-			public double PythonRevolver{ get; set; }
-			public double Revolver{ get; set; }
-			public double RocketLauncher{ get; set; }
-			public double SalvagedCleaver{ get; set; }
-			public double SalvagedSword{ get; set; }
-			public double SatchelCharge{ get; set; }
-			public double SemiAutomaticPistol{ get; set; }
-			public double SemiAutomaticRifle{ get; set; }
-			public double Snowball{ get; set; }
-			public double Spas12Shotgun{ get; set; }
-			public double StoneSpear{ get; set; }
-			public double Thompson{ get; set; }
-			public double TimedExplosiveCharge{ get; set; }
-			public double WaterpipeShotgun{ get; set; }
-			public double WoodenSpear{ get; set; }
-
-			public double distance_50{ get; set; }
-			public double distance_100{ get; set; }
-			public double distance_200{ get; set; }
-			public double distance_300{ get; set; }
-			public double distance_400{ get; set; }
-			public double HappyHourMultiplier{ get; set; }
-			public double VIPMultiplier{ get; set; }
-
-			// public double CustomPermissionMultiplier{ get; set; }
-
-			public double GetWeaponM(string wn)
+			catch
 			{
-				if (wn == "Assault Rifle") return this.AssaultRifle;
-				else if (wn == "Beancan Grenade") return this.BeancanGrenade;
-				else if (wn == "Bolt Action Rifle") return this.BoltActionRifle;
-				else if (wn == "Bone Club") return this.BoneClub;
-				else if (wn == "Bone Knife") return this.BoneKnife;
-				else if (wn == "Cand Cane Club") return this.CandyCaneClub;
-				else if (wn == "Compound Bow") return this.CompoundBow;
-				else if (wn == "Crossbow") return this.Crossbow;
-				else if (wn == "Custom SMG") return this.CustomSMG;
-				else if (wn == "Double Barrel Shotgun") return this.DoubleBarrelShotgun;
-				else if (wn == "Eoka Pistol") return this.EokaPistol;
-				else if (wn == "Explosivesatchel") return this.SatchelCharge;
-				else if (wn == "Explosivetimed") return this.TimedExplosiveCharge;
-				else if (wn == "F1 Grenade") return this.F1Grenade;
-				else if (wn == "Handmade Fishing Rod") return this.HandmadeFishingRod;
-				else if (wn == "Hunting Bow") return this.HuntingBow;
-				else if (wn == "LR-300 Assault Rifle") return this.LR300;
-				else if (wn == "Longsword") return this.Longsword;
-				else if (wn == "M249") return this.M249;
-				else if (wn == "M92 Pistol") return this.M92Pistol;
-				else if (wn == "MP5A4") return this.MP5A4;
-				else if (wn == "Mace") return this.Mace;
-				else if (wn == "Machete") return this.Machete;
-				else if (wn == "Nail Gun") return this.NailGun;
-				else if (wn == "Pump Shotgun") return this.PumpShotgun;
-				else if (wn == "Python Revolver") return this.PythonRevolver;
-				else if (wn == "Revolver") return this.Revolver;
-				else if (wn == "Rocket Launcher") return this.RocketLauncher;
-				else if (wn == "Salvaged Cleaver") return this.SalvagedCleaver;
-				else if (wn == "Salvaged Sword") return this.SalvagedSword;
-				else if (wn == "Semi-Automatic Pistol") return this.SemiAutomaticPistol;
-				else if (wn == "Semi-Automatic Rifle") return this.SemiAutomaticRifle;
-				else if (wn == "Snowball") return this.Snowball;
-				else if (wn == "Spas-12 Shotgun") return this.Spas12Shotgun;
-				else if (wn == "Stone Spear") return this.StoneSpear;
-				else if (wn == "Thompson") return this.Thompson;
-				else if (wn == "Waterpipe Shotgun") return this.WaterpipeShotgun;
-				else if (wn == "Wooden Spear") return this.WoodenSpear;
-				else return 1;
+				pref = "hko";
+				playerPrefs.Add(iplayer.Id,pref);
 			}
 
-			public double GetDistanceM(float distance)
+			if (pstate == true && !pref.Contains(ptype))
 			{
-				if (distance >= 400) return this.distance_400;
-				else if (distance >= 300) return this.distance_300;
-				else if (distance >= 200) return this.distance_200;
-				else if (distance >= 100) return this.distance_100;
-				else if (distance >= 50) return this.distance_50;
-				else return 1;
+				pref = ptype + pref;
+			}
+			if (pstate == false && pref.Contains(ptype))
+			{
+				pref = pref.Replace(ptype, "");
 			}
 
-			public double GetItemByString(string itemName)
-			{
-				if (itemName == "AssaultRifle") return this.AssaultRifle;
-				else if (itemName == "Beancan Grenade") return this.BeancanGrenade;
-				else if (itemName == "BoltActionRifle") return this.BoltActionRifle;
-				else if (itemName == "Bone Club") return this.BoneClub;
-				else if (itemName == "Bone Knife") return this.BoneKnife;
-				else if (itemName == "Candy Cane Club") return this.CandyCaneClub;
-				else if (itemName == "Crossbow") return this.Crossbow;
-				else if (itemName == "CustomSMG") return this.CustomSMG;
-				else if (itemName == "DoubleBarrelShotgun") return this.DoubleBarrelShotgun;
-				else if (itemName == "EokaPistol") return this.EokaPistol;
-				else if (itemName == "F1 Grenade") return this.F1Grenade;
-				else if (itemName == "Handmade Fishing Rod") return this.HandmadeFishingRod;
-				else if (itemName == "HuntingBow") return this.HuntingBow;
-				else if (itemName == "LR300") return this.LR300;
-				else if (itemName == "Longsword") return this.Longsword;
-				else if (itemName == "M249") return this.M249;
-				else if (itemName == "M92 Pistol") return this.M92Pistol;
-				else if (itemName == "MP5A4") return this.MP5A4;
-				else if (itemName == "Mace") return this.Mace;
-				else if (itemName == "Machete") return this.Machete;
-				else if (itemName == "Nail Gun") return this.NailGun;
-				else if (itemName == "PumpShotgun") return this.PumpShotgun;
-				else if (itemName == "Python Revolver") return this.PythonRevolver;
-				else if (itemName == "Revolver") return this.Revolver;
-				else if (itemName == "Rocket Launcher") return this.RocketLauncher;
-				else if (itemName == "Salvaged Cleaver") return this.SalvagedCleaver;
-				else if (itemName == "Salvaged Sword") return this.SalvagedSword;
-				else if (itemName == "SatchelCharge") return this.SatchelCharge;
-				else if (itemName == "SemiAutomaticPistol") return this.SemiAutomaticPistol;
-				else if (itemName == "SemiAutomaticRifle") return this.SemiAutomaticRifle;
-				else if (itemName == "Snowball") return this.Snowball;
-				else if (itemName == "Spas-12 Shotgun") return this.Spas12Shotgun;
-				else if (itemName == "Stone Spear") return this.StoneSpear;
-				else if (itemName == "Thompson") return this.Thompson;
-				else if (itemName == "TimedExplosiveCharge") return this.TimedExplosiveCharge;
-				else if (itemName == "WaterpipeShotgun") return this.WaterpipeShotgun;
-				else if (itemName == "Wooden Spear") return this.WoodenSpear;
+			playerPrefs[iplayer.Id] = pref;
+			dataFile.WriteObject(playerPrefs);
+			if (pstate)
+				pstateString = "on";
+			else
+				pstateString = "off";
+			
+			if (ptype == "h")
+				ptypeString = "harvesting";
+			else if (ptype == "k")
+				ptypeString = "killing";
+			else if (ptype == "o")
+				ptypeString = "opening";
 
-				else if (itemName == "distance_50") return this.distance_50;
-				else if (itemName == "distance_100") return this.distance_100;
-				else if (itemName == "distance_200") return this.distance_200;
-				else if (itemName == "distance_300") return this.distance_300;
-				else if (itemName == "distance_400") return this.distance_400;
-				else if (itemName == "HappyHourMultiplier") return this.HappyHourMultiplier;
-				else if (itemName == "VIPMultiplier") return this.VIPMultiplier;
-
-				// else if (itemName == "CustomPermissionMultiplier")
-				//    return this.CustomPermissionMultiplier;
-				else return 1;
-			}
+			
+			MessagePlayer(iplayer, Lang("rrm change", iplayer.Id, ptypeString, pstateString), Lang("Prefix"), null);
+			Puts (pref + " : " + pstateString + " : " + ptype);
 		}
+		#endregion
 
-		class Options
-		{
-			public bool ActivityReward_Enabled{ get; set; }
-			public bool WelcomeMoney_Enabled{ get; set; }
-			public bool WeaponMultiplier_Enabled{ get; set; }
-			public bool DistanceMultiplier_Enabled{ get; set; }
-			public bool HappyHour_Enabled{ get; set; }
-			public bool VIPMultiplier_Enabled{ get; set; }
-			public bool UseEconomicsPlugin{ get; set; }
-			public bool UseServerRewardsPlugin{ get; set; }
-			public bool UseFriendsPlugin{ get; set; }
-			public bool UseClansPlugin{ get; set; }
-			public bool Economics_TakeMoneyFromVictim{ get; set; }
-			public bool ServerRewards_TakeMoneyFromVictim{ get; set; }
-			public bool PrintToConsole{ get; set; }
-			// public bool CustomPermissionMultiplier_Enabled{ get; set; }
-			public bool NPCReward_Enabled{ get; set; }
-
-			public bool GetItemByString(string itemName)
-			{
-				if (itemName == "ActivityReward_Enabled")
-					return this.ActivityReward_Enabled;
-				else if (itemName == "WelcomeMoney_Enabled")
-					return this.WelcomeMoney_Enabled;
-				else if (itemName == "WeaponMultiplier_Enabled")
-					return this.WeaponMultiplier_Enabled;
-				else if (itemName == "DistanceMultiplier_Enabled")
-					return this.DistanceMultiplier_Enabled;
-				else if (itemName == "UseEconomicsPlugin")
-					return this.UseEconomicsPlugin;
-				else if (itemName == "UseServerRewardsPlugin")
-					return this.UseServerRewardsPlugin;
-				else if (itemName == "UseFriendsPlugin")
-					return this.UseFriendsPlugin;
-				else if (itemName == "UseClansPlugin")
-					return this.UseClansPlugin;
-				else if (itemName == "Economics_TakeMoneyFromVictim")
-					return this.Economics_TakeMoneyFromVictim;
-				else if (itemName == "ServerRewards_TakeMoneyFromVictim")
-					return this.ServerRewards_TakeMoneyFromVictim;
-				else if (itemName == "PrintToConsole")
-					return this.PrintToConsole;
-				else if (itemName == "HappyHour_Enabled")
-					return this.HappyHour_Enabled;
-				else if (itemName == "VIPMultiplier_Enabled")
-					return this.VIPMultiplier_Enabled;
-				else if (itemName == "NPCReward_Enabled")
-					return this.NPCReward_Enabled;
-				else
-					return false;
-			}
-		}
-
-		class Rewards_Version
-		{
-			public string Version{ get; set; }
-		}
-
-		//class Strings
-		//{
-		//    public string CustomPermissionName { get; set; }
-		//    public string GetItemByString(string itemName)
-		//    {
-		//        if (itemName == "CustomPermissionName")
-		//            return this.CustomPermissionName;
-		//        else
-		//            return null;
-		//    }
-		//}
 	}
 }
