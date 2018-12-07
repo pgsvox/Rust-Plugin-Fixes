@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("Rust Rewards", "MSpeedie", "2.0.15")]
+	[Info("Rust Rewards", "MSpeedie", "2.0.17")]
 	[Description("Rewards players for activities using Economic or ServerRewards")]
 	// Big Thank you to Tarek the original author of this plugin!
 	// redBDGR, for maintaining the Barrel Points plugin
@@ -109,6 +109,7 @@ namespace Oxide.Plugins
 		private double mult_lr300                = 1.0;
 		private double mult_longsword            = 1.0;
 		private double mult_m249                 = 1.0;
+		private double mult_m39                  = 1.0;
 		private double mult_m92pistol            = 1.0;
 		private double mult_mp5a4                = 1.0;
 		private double mult_mace                 = 1.0;
@@ -242,13 +243,13 @@ namespace Oxide.Plugins
 
 			try
 			{
+				economicsloaded = false;
 				if (UseEconomicsPlugin)
 				{
 					if (Economics != null && Economics.IsLoaded == true)
 						economicsloaded = true;
 					else
 					{
-						economicsloaded = false;
 						PrintWarning("Economics plugin was not found! Can't reward players using Economics.");
 					}
 				}
@@ -260,13 +261,13 @@ namespace Oxide.Plugins
 
 			try
 			{
+				serverrewardsloaded = false;
 				if (UseServerRewardsPlugin)
 				{
 					if(ServerRewards != null && ServerRewards.IsLoaded == true)
 						serverrewardsloaded = true;
 					else
 					{
-						serverrewardsloaded = false;
 						PrintWarning("ServerRewards plugin was not found! Can't reward players using ServerRewards.");
 					}
 				}
@@ -278,13 +279,13 @@ namespace Oxide.Plugins
 
 			try
 			{
+				friendsloaded = false;
 				if (UseFriendsPlugin)
 				{
 					if (Friends != null && Friends.IsLoaded == true)
 						friendsloaded = true;
 					else
 					{
-						friendsloaded = false;
 						PrintWarning("Friends plugin was not found! Can't check if victim is friend to killer.");
 					}
 				}
@@ -296,18 +297,19 @@ namespace Oxide.Plugins
 
 			try
 			{
+				clansloaded = false;
 				if (UseClansPlugin)
 				{
 					if (Clans != null && Clans.IsLoaded == true)
 						clansloaded = true;
 					else
 					{
-						clansloaded = false;
+						
 						PrintWarning("Clans plugin was not found! Can't check if victim is in the same clan of killer.");
 					}
 				}
 			}
-			catch
+			catch 
 			{
 				clansloaded = false;
 			}
@@ -422,6 +424,7 @@ namespace Oxide.Plugins
 		mult_lr300                 = Convert.ToDouble(GetConfigValue("multipliers","lr300", 1));
 		mult_longsword             = Convert.ToDouble(GetConfigValue("multipliers","longsword", 1.5));
 		mult_m249                  = Convert.ToDouble(GetConfigValue("multipliers","m249", 1));
+		mult_m39                   = Convert.ToDouble(GetConfigValue("multipliers","m39", 1));
 		mult_m92pistol             = Convert.ToDouble(GetConfigValue("multipliers","m92pistol", 1));
 		mult_mp5a4                 = Convert.ToDouble(GetConfigValue("multipliers","mp5a4", 1));
 		mult_mace                  = Convert.ToDouble(GetConfigValue("multipliers","mace", 1.5));
@@ -498,7 +501,7 @@ namespace Oxide.Plugins
 
 	void OnServerInitialized()
 	{
-		if (!permission.PermissionExists(permVIP)) permission.RegisterPermission(permVIP, this);
+		permission.RegisterPermission(permVIP, this);
 		LoadDefaultMessages();
 
 		playerPrefs = dataFile.ReadObject<Dictionary<string, string>>();
@@ -521,9 +524,11 @@ namespace Oxide.Plugins
 		{
 			var gtime = TOD_Sky.Instance.Cycle.Hour;
 			IPlayer ip = null;
+			
+			
 			if (ActivityReward_Enabled)
 			{
-				foreach (var p in BasePlayer.activePlayerList) //players.Connected)
+				foreach (var p in BasePlayer.activePlayerList.ToArray()) //players.Connected)
 				{
 					ip = p.IPlayer;
 					if (ip != null && (Convert.ToDouble(p.secondsConnected) / 60 > ActivityReward_Minutes))
@@ -643,12 +648,15 @@ namespace Oxide.Plugins
 			// we check ptype (prefence type) to see if the player wants to see these
 			string pref = "hko";
 
-			if (player == null || msg == null || player.Id == null) return;
+			if (player == null || string.IsNullOrEmpty(msg) || player.Id == null) return;
 			else
 			{
 				try
 				{
 					playerPrefs.TryGetValue(player.Id, out pref);
+					// catch and correct any corrupted preferences
+					if (string.IsNullOrEmpty(pref) || pref.Length > 3  || pref.Length < 1)
+						pref = "hko";
 				}
 				catch
 				{
@@ -656,7 +664,7 @@ namespace Oxide.Plugins
 				}
 			}
 
-			if (ptype ==  null || ptype == string.Empty || pref.Contains(ptype))
+			if (string.IsNullOrEmpty(ptype) || pref.Contains(ptype))
 			{
 				if (prefix == null)
 					player.Message( msg);
@@ -678,8 +686,13 @@ namespace Oxide.Plugins
 
 		private double GetWeapon(string weaponshortname)
 		{
-			string weaponname = Regex.Replace(weaponshortname,"_",".");
+			string weaponname = null;
 					
+			if (string.IsNullOrEmpty(weaponshortname))
+				return 1;
+			else
+				weaponname = weaponshortname.Replace('_','.');
+			
 			if      (weaponname.Contains("ak47u"))                 return mult_assaultrifle;
 			else if (weaponname.Contains("axe.salvaged"))          return mult_axe_salvaged;
 			else if (weaponname.Contains("bolt.rifle"))            return mult_boltactionrifle;
@@ -710,6 +723,7 @@ namespace Oxide.Plugins
 			else if (weaponname.Contains("longsword"))             return mult_longsword;
 			else if (weaponname.Contains("lr300"))                 return mult_lr300;
 			else if (weaponname.Contains("m249"))                  return mult_m249;
+			else if (weaponname.Contains("m39"))                   return mult_m39;
 			else if (weaponname.Contains("m92"))                   return mult_m92pistol;
 			else if (weaponname.Contains("mace"))                  return mult_mace;
 			else if (weaponname.Contains("machete"))               return mult_machete;
@@ -1242,6 +1256,7 @@ namespace Oxide.Plugins
 				)
 			{
 				var prefab = info.WeaponPrefab?.ShortPrefabName;
+				
 				// Puts(prefab + " GetWeapon: " + GetWeapon(prefab) + " Distance: " + GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())));
 				totalmultiplier = (DistanceMultiplier_Enabled ? GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())) : 1) *
 									(WeaponMultiplier_Enabled ? GetWeapon(prefab) : 1) *

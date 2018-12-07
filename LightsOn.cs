@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lights On", "mspeedie", "1.3.4")]
+    [Info("Lights On", "mspeedie", "1.3.6")]
     [Description("Toggle lights on/off either as configured or by name.")]
     public class LightsOn : CovalencePlugin
 	//RustPlugin
@@ -71,6 +71,9 @@ namespace Oxide.Plugins
 
 			[JsonProperty(PropertyName = "Search lights (true/false)")]
 			public bool SearchLights { get; set; } = true;
+
+			[JsonProperty(PropertyName = "Simple lights (true/false)")]
+			public bool SimpleLights { get; set; } = true;
 
 			[JsonProperty(PropertyName = "SpookySpeaker (true/false)")]
 			public bool Speaker { get; set; } = false;
@@ -147,6 +150,7 @@ namespace Oxide.Plugins
         protected override void LoadConfig()
         {
             base.LoadConfig();
+
             try
             {
                 config = Config.ReadObject<Configuration>();
@@ -205,6 +209,7 @@ namespace Oxide.Plugins
 				// start timer to toggle lights based on time
 				lotimer = timer.Once(config.CheckFrequency, TimerProcess);
 			}
+			SaveConfig();
 
         }
 
@@ -286,6 +291,8 @@ namespace Oxide.Plugins
 				case "refinery_small_deployed":		return config.Refineries;
 				case "searchlight":					return config.SearchLights;
 				case "searchlight.deployed":		return config.SearchLights;
+				case "simplelight":					return config.SimpleLights;
+				case "simplelight.deployed":		return config.SimpleLights;
 				case "skull_fire_pit":				return config.FirePits;
 				case "small_refinery_static":		return config.Refineries;
 				case "smallcandleset":				return config.Candles;
@@ -345,6 +352,8 @@ namespace Oxide.Plugins
         {
             BaseOven[] ovens = UnityEngine.Object.FindObjectsOfType<BaseOven>() as BaseOven[];
             SearchLight[] searchlights = UnityEngine.Object.FindObjectsOfType<SearchLight>() as SearchLight[];
+            CeilingLight[] ceilinglights = UnityEngine.Object.FindObjectsOfType<CeilingLight>() as CeilingLight[];
+            SimpleLight[] simplelights = UnityEngine.Object.FindObjectsOfType<SimpleLight>() as SimpleLight[];
             Candle[] candles = UnityEngine.Object.FindObjectsOfType<Candle>() as Candle[];
             FogMachine[] fogmachines = UnityEngine.Object.FindObjectsOfType<FogMachine>() as FogMachine[];
             StrobeLight[] strobelights = UnityEngine.Object.FindObjectsOfType<StrobeLight>() as StrobeLight[];
@@ -386,6 +395,38 @@ namespace Oxide.Plugins
 					{
 						searchlight.SetFlag(BaseEntity.Flags.On, state);
 						searchlight.secondsRemaining = 99999999;
+					}
+					catch
+					{}
+                }
+            }
+
+            foreach (CeilingLight ceilinglight in ceilinglights)
+            {
+                if (ceilinglight == null || ceilinglight.IsDestroyed || ceilinglight.IsOn() == state)
+                        continue;
+				else if ((string.IsNullOrEmpty(prefabName) && ProcessShortPrefabName(ceilinglight.ShortPrefabName)) ||
+						 (!string.IsNullOrEmpty(prefabName) && (prefabName == "all" || ceilinglight.ShortPrefabName.Contains(prefabName))))
+                {
+					try
+					{
+						ceilinglight.SetFlag(BaseEntity.Flags.On, state);
+					}
+					catch
+					{}
+                }
+            }
+
+            foreach (SimpleLight simplelight in simplelights)
+            {
+                if (simplelight == null || simplelight.IsDestroyed || simplelight.IsOn() == state)
+                        continue;
+				else if ((string.IsNullOrEmpty(prefabName) && ProcessShortPrefabName(simplelight.ShortPrefabName)) ||
+						 (!string.IsNullOrEmpty(prefabName) && (prefabName == "all" || simplelight.ShortPrefabName.Contains(prefabName))))
+                {
+					try
+					{
+						simplelight.SetFlag(BaseEntity.Flags.On, state);
 					}
 					catch
 					{}

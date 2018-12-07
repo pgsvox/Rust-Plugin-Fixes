@@ -485,8 +485,8 @@ namespace Oxide.Plugins
 
         private void OnPlayerInit(BasePlayer player)
         {
-	        if (player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer)
-		        return;
+			if (player == null || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer)
+				return;
 
             var backpack = Backpack.LoadOrCreate(player.userID);
 
@@ -534,7 +534,7 @@ namespace Oxide.Plugins
 
         private void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
         {
-            if (victim is BasePlayer && !(victim is NPCPlayer))
+            if (victim is BasePlayer && !(victim is NPCPlayer || victim is NPCPlayerApex || victim is NPCPlayer || victim is NPCMurderer || victim.name.Contains("/npc/scientist/htn")))
             {
                 var player = (BasePlayer)victim;
                 var backpack = Backpack.LoadOrCreate(player.userID);
