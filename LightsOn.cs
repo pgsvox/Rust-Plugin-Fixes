@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lights On", "mspeedie", "1.3.6")]
+    [Info("Lights On", "mspeedie", "1.3.7")]
     [Description("Toggle lights on/off either as configured or by name.")]
     public class LightsOn : CovalencePlugin
 	//RustPlugin
@@ -627,6 +627,16 @@ namespace Oxide.Plugins
 				{
 					var bo = entity as BaseOven;
 					bo.SetFlag(BaseEntity.Flags.On, true);
+				}
+				else if (entity is CeilingLight)
+				{
+					var cl = entity as CeilingLight;
+					cl.SetFlag(BaseEntity.Flags.On, true);
+				}
+				else if (entity is SimpleLight)
+				{
+					var sl = entity as SimpleLight;
+					sl.SetFlag(BaseEntity.Flags.On, true);
 				}
 				else if (entity is SearchLight)
 				{

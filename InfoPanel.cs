@@ -749,6 +749,12 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
+            Airplane = new AirplaneEvent();
+            Helicopter = new HelicopterEvent();
+			Cargoship = new CargoshipEvent();
+            Chinook = new ChinookEvent();
+            Bradley = new BradleyEvent();
+
             Clock = new Watch
             (
                 Settings.GetPanelSettingsValue("Clock", "ClockUpdateFrequency (seconds)", ClockUpdateFrequency),
@@ -761,12 +767,6 @@ namespace Oxide.Plugins
                 Settings.GetPanelSettingsValue("MessageBox", "MessageUpdateFrequency (seconds)", MessageUpdateFrequency),
                 Settings.GetPanelSettingsValue("MessageBox", "MsgOrder", "normal")
             );
-
-            Airplane = new AirplaneEvent();
-            Helicopter = new HelicopterEvent();
-			Cargoship = new CargoshipEvent();
-            Chinook = new ChinookEvent();
-            Bradley = new BradleyEvent();
 
             CompassObj = new Compass
             (
@@ -1592,7 +1592,12 @@ namespace Oxide.Plugins
 
         public void CheckAirplane()
         {
-            ActivePlanes.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+            try
+			{
+				ActivePlanes.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+			}
+			catch {}
+			
             if (ActivePlanes.Count > 0)
             {
                 if(Airplane.isActive == false)
@@ -1613,7 +1618,11 @@ namespace Oxide.Plugins
 
         public void CheckHelicopter()
         {
-            ActiveHelicopters.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+			try
+			{
+				ActiveHelicopters.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+			}
+			catch {}
 
             if (ActiveHelicopters.Count > 0)
             {
@@ -1636,7 +1645,11 @@ namespace Oxide.Plugins
 
 		public void CheckCargoship()
         {
-            ActiveCargoships.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+            try
+			{
+				ActiveCargoships.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+			}
+			catch {}
 
             if (ActiveCargoships.Count > 0)
             {
@@ -1659,7 +1672,11 @@ namespace Oxide.Plugins
 
         public void CheckChinook()
         {
-            ActiveChinooks.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+            try
+			{
+				ActiveChinooks.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+			}
+			catch {}
 
             if (ActiveChinooks.Count > 0)
             {
@@ -1682,7 +1699,11 @@ namespace Oxide.Plugins
 
         public void CheckBradley()
         {
-            ActiveBradleys.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+			try
+			{
+				ActiveBradleys.RemoveAll(p => !p.IsValid() || !p.gameObject.activeInHierarchy);
+			}
+			catch {}
 
             if (ActiveBradleys.Count > 0)
             {

@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-	[Info("Rust Rewards", "MSpeedie", "2.0.17")]
+	[Info("Rust Rewards", "MSpeedie", "2.1.1")]
 	[Description("Rewards players for activities using Economic or ServerRewards")]
 	// Big Thank you to Tarek the original author of this plugin!
 	// redBDGR, for maintaining the Barrel Points plugin
@@ -138,6 +138,8 @@ namespace Oxide.Plugins
 		private double mult_distance_300         = 1.0;
 		private double mult_distance_400         = 1.0;
 		private double mult_distance_50		     = 1.0;
+		private double rate_sam                  = 1.0;
+		private double rate_trap                 = 1.0;
 		private double rate_autoturret           = 1.0;
 		private double rate_barrel               = 1.0;
 		private double rate_bear                 = 1.0;
@@ -304,12 +306,12 @@ namespace Oxide.Plugins
 						clansloaded = true;
 					else
 					{
-						
+
 						PrintWarning("Clans plugin was not found! Can't check if victim is in the same clan of killer.");
 					}
 				}
 			}
-			catch 
+			catch
 			{
 				clansloaded = false;
 			}
@@ -346,16 +348,18 @@ namespace Oxide.Plugins
 				["ore"] = "You received {0} Reward for collecting Ore",
 				["player"] = "You received {0} Reward for killing a player",
 				["pumpkin"] = "You received {0} Reward for collecting Pumpkin",
+				["sam"] = "You received {0} for destroying a SAM",
 				["scientist"] = "You received {0} Reward for killing a scientist",
 				["stag"] = "You received {0} Reward for killing a stag",
 				["stones"] = "You received {0} Reward for collecting Stones",
 				["sulfur"] = "You received {0} Reward for collecting Sulfur",
 				["supplycrate"] = "You received {0} Reward for looting a supply crate",
-				["welcomereward"] = "Welcome to server! You received {0} as a welcome reward.",
+				["trap"] = "You received {0} for destroying a trap",
+				["welcomemoney"] = "Welcome to server! You received {0} as a welcome reward.",
 				["wolf"] = "You received {0} Reward for killing a wolf",
 				["wood"] = "You received {0} Reward for collecting Wood",
-				["HappyHourEnd"] = "Happy Hour(s) ended.",
-				["HappyHourStart"] = "Happy Hour(s) started.",
+				["happyhourend"] = "Happy Hour(s) ended.",
+				["happyhourstart"] = "Happy Hour(s) started.",
 				["Prefix"] = "Rust Rewards",
 				["rrm change"] = "Rewards Messages for {0} is now {1}",
 				["rrm syntax"] = "/rrm syntax:  /rrm type state  Type is one of h,o or k (Havest, Open or Kill).  State is on or off.  for example /rrm h off",
@@ -474,11 +478,13 @@ namespace Oxide.Plugins
 		rate_ore                   = Convert.ToDouble(GetConfigValue("rates","ore", 2));
 		rate_pumpkin               = Convert.ToDouble(GetConfigValue("rates","pumpkin", 1));
 		rate_murderer              = Convert.ToDouble(GetConfigValue("rates","murderer", 6));
+		rate_sam                   = Convert.ToDouble(GetConfigValue("rates","sam", 5));
 		rate_scientist             = Convert.ToDouble(GetConfigValue("rates","scientist", 8));
 		rate_stag                  = Convert.ToDouble(GetConfigValue("rates","stag", 2));
 		rate_stones                = Convert.ToDouble(GetConfigValue("rates","stones", 1));
 		rate_sulfur                = Convert.ToDouble(GetConfigValue("rates","sulfur", 1));
 		rate_supplycrate           = Convert.ToDouble(GetConfigValue("rates","supplycrate", 5));
+		rate_trap                  = Convert.ToDouble(GetConfigValue("rates","trap", 2));
 		rate_wolf                  = Convert.ToDouble(GetConfigValue("rates","wolf", 8));
 		rate_wood                  = Convert.ToDouble(GetConfigValue("rates","wood", 1));
 		rate_npckill               = Convert.ToDouble(GetConfigValue("rates","npckill", 8));
@@ -520,12 +526,17 @@ namespace Oxide.Plugins
 		#endregion
 	}
 
-		private void CheckCurrentTime()
+	static string TrimPunctuation(string value)
+    {
+        return Regex.Replace(value, "[^A-Za-z0-9]", "");
+    }
+
+	private void CheckCurrentTime()
 		{
 			var gtime = TOD_Sky.Instance.Cycle.Hour;
 			IPlayer ip = null;
-			
-			
+
+
 			if (ActivityReward_Enabled)
 			{
 				foreach (var p in BasePlayer.activePlayerList.ToArray()) //players.Connected)
@@ -540,7 +551,7 @@ namespace Oxide.Plugins
 							{
 								if (Convert.ToDouble(p.secondsConnected - Activity_Reward[ip]) / 60 > ActivityReward_Minutes)
 								{
-									GiveReward(ip, "ActivityReward", null, 1);
+									GiveReward(ip, "activity", null, null, 1);
 									try
 									{
 										Activity_Reward[ip] = p.secondsConnected;
@@ -584,7 +595,7 @@ namespace Oxide.Plugins
 						happyhouractive = true;
 						if (PrintInConsole)
 							Puts("Happy hour(s) started.  Ending at " + HappyHour_EndHour);
-						BroadcastMessage(Lang("HappyHourStart"), Lang("Prefix"));
+						BroadcastMessage(Lang("happyhourstart"), Lang("Prefix"));
 					}
 				}
 				else
@@ -596,7 +607,7 @@ namespace Oxide.Plugins
 						happyhouractive = false;
 						if (PrintInConsole)
 							Puts("Happy Hour(s) ended.  Next Happy Hour(s) starts at " + HappyHour_BeginHour);
-						BroadcastMessage(Lang("HappyHourEnd"), Lang("Prefix"));
+						BroadcastMessage(Lang("happyhourend"), Lang("Prefix"));
 					}
 				}
 			}
@@ -612,18 +623,29 @@ namespace Oxide.Plugins
 			{
 				try
 				{
-					if (playerPrefs.ContainsKey(iplayer.Id)) return;
-					else if (PrintInConsole)
-						Puts("New Player: " + iplayer.Name);
+					if (playerPrefs.ContainsKey(iplayer.Id))
+						return;
+					else
+					{
+						if (PrintInConsole)
+							Puts("New Player: " + iplayer.Name);
+						playerPrefs.Add(iplayer.Id,"hko");
+						dataFile.WriteObject(playerPrefs);
+						GiveReward(iplayer, "welcomemoney", null, null, 1);
+					}
 				}
 				catch
 				{
 					if (PrintInConsole)
 						Puts("New Player: " + iplayer.Name);
+					try
+					{
+						playerPrefs.Add(iplayer.Id,"hko");
+						dataFile.WriteObject(playerPrefs);
+						GiveReward(iplayer, "welcomemoney", null, null, 1);
+					}
+					catch {}
 				}
-				playerPrefs.Add(iplayer.Id,"hko");
-				dataFile.WriteObject(playerPrefs);
-				GiveReward(iplayer, "welcomemoney", null, 1);
 			}
 		}
 
@@ -687,12 +709,12 @@ namespace Oxide.Plugins
 		private double GetWeapon(string weaponshortname)
 		{
 			string weaponname = null;
-					
+
 			if (string.IsNullOrEmpty(weaponshortname))
 				return 1;
 			else
 				weaponname = weaponshortname.Replace('_','.');
-			
+
 			if      (weaponname.Contains("ak47u"))                 return mult_assaultrifle;
 			else if (weaponname.Contains("axe.salvaged"))          return mult_axe_salvaged;
 			else if (weaponname.Contains("bolt.rifle"))            return mult_boltactionrifle;
@@ -798,13 +820,14 @@ namespace Oxide.Plugins
 						 shortName.Contains("pine") ||
 						 shortName.Contains("juniper") ||
 						 shortName.Contains("deadtree") ||
+						 shortName.Contains("wood") ||
 						 shortName.Contains("log") ||
 						 shortName.Contains("palm"))
 				{
 					resource = "wood";
 				}
 				//else
-				//	Puts("OED: " + resource + " : " + player.UserIDString);
+				//	Puts("OED: " + shortName + " : " + resource + " : " + player.Id);
 
 				if (resource != null && dispenser.gameObject.ToBaseEntity().net.ID != null)
 				{
@@ -824,7 +847,7 @@ namespace Oxide.Plugins
 						}
 						catch {}
 					// uncomment if you want per action reward
-					//Puts(resource + " : " + player.UserIDString);
+					//Puts(resource + " : " + player.Id);
 					//totalmultiplier = ((happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
 					//GiveReward(player, resource, "h", totalmultiplier);
 				}
@@ -855,7 +878,7 @@ namespace Oxide.Plugins
 			{
 				resource = "ore";
 			}
-			else if (shortName.Contains("wood"))
+			else if (shortName.Contains("wood") || shortName.Contains("log"))
 			{
 				resource = "wood";
 			}
@@ -881,7 +904,7 @@ namespace Oxide.Plugins
 			if (resource != null)
 			{
 				totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(iplayer, permVIP)) ? mult_VIPMultiplier : 1);
-				GiveReward(iplayer, resource, "h", totalmultiplier);
+				GiveReward(iplayer, resource, "h", null, totalmultiplier);
 			}
 		}
 
@@ -905,7 +928,7 @@ namespace Oxide.Plugins
 				return;
 			}
 
-			// used to track who killed it. last hit wins ;-)  Note: does not support more than one at a time
+			// used to track who killed it. last hit wins ;-)  Note: does not support more than one (Heli Bradley or Chinook) at a time
 			// Puts(entity.ShortPrefabName);
 
 			if (entity is BaseHelicopter && player != null)
@@ -968,6 +991,9 @@ namespace Oxide.Plugins
 			//	 entity.ShortPrefabName.Contains("divesite") ||
 			//	 entity.ShortPrefabName.Contains("barrel") ||
 			//	 entity.ShortPrefabName.Contains("hammer") ||
+			//	 entity.ShortPrefabName.Contains("guitar") ||
+			//	 entity.ShortPrefabName.Contains("junkpile") ||
+			//	 entity.ShortPrefabName.Contains("waterbottle") ||
 			//	 entity.ShortPrefabName.Contains("jug") ||
 			//	 entity.ShortPrefabName.Contains("salvage") ||
 			//	 entity.ShortPrefabName.Contains("generic") ||
@@ -988,304 +1014,417 @@ namespace Oxide.Plugins
 			//{
 			//	Puts("OEK:" + entity.ShortPrefabName);
 			//}
+
 			if (entity == null || entity.ShortPrefabName == null || entity.net.ID == null)
 				return;
+			else if (entity is BaseHelicopter)
+			{
+				// Puts("OEK:" + entity.ShortPrefabName);
+				if (helilasthitplayer != null)
+					{
+						player = helilasthitplayer;
+						helilasthitplayer = null;
+						resource          = "helicopter";
+						ptype             = "k";
+						key_found         = true;
+
+					}
+			}
+			else if (entity is CH47HelicopterAIController)
+			{
+				// Puts("OEK:" + entity.ShortPrefabName);
+				if (chinooklasthitplayer != null)
+					{
+						player = chinooklasthitplayer;
+						chinooklasthitplayer = null;
+						resource             = "chinook";
+						ptype                = "k";
+						key_found            = true;
+					}
+			}
+			else if (entity is BradleyAPC)
+			{
+				// Puts("OEK:" + entity.ShortPrefabName);
+				if (bradleylasthitplayer != null)
+					{
+						player = bradleylasthitplayer;
+						bradleylasthitplayer = null;
+						resource             = "bradley";
+						ptype                = "k";
+						key_found            = true;
+					}
+			}
 			else
 			{
 				try
 				{
-					key_found = (EntityCollectionCache.ContainsKey(entity.net.ID));
+					if (EntityCollectionCache.ContainsKey(entity.net.ID) && EntityCollectionCache.TryGetValue(entity.net.ID, out player))
+					{
+						key_found = true;
+						try
+						{
+							EntityCollectionCache.Remove(entity.net.ID);
+						}
+						catch 
+						{
+							Puts("Tell MSpeedie Error on OKE Remove");
+						}
+					}
+					else
+						key_found = false;
 				}
-				catch {key_found = false; }
-
-				if (key_found)
+				catch 
 				{
-					try
-					{
-					if (EntityCollectionCache.TryGetValue(entity.net.ID, out player))
-					{
-						if (player == null) return;
-						else if (entity.ShortPrefabName.Contains("stone"))
-						{
-							resource = "stones";
-							ptype    = "h";
-						}
-						else if (entity.ShortPrefabName.Contains("sulfur"))
-						{
-							resource = "sulfur";
-							ptype    = "h";
-						}
-						else if (entity.ShortPrefabName.Contains("-ore") || 
-								 entity.ShortPrefabName.Contains("ore_") || 
-								 entity.ShortPrefabName.Contains(".ore"))
-						{
-							resource = "ore";
-							ptype    = "h";
-						}
-						else if (entity.ShortPrefabName.Contains("cactus"))
-						{
-							resource = "cactus";
-							ptype    = "h";
-						}
-						else if (entity.ShortPrefabName.Contains("driftwood") ||
-								 entity.ShortPrefabName.Contains("douglas_fir") ||
-								 entity.ShortPrefabName.Contains("beech") ||
-								 entity.ShortPrefabName.Contains("birch") ||
-								 entity.ShortPrefabName.Contains("oak") ||
-								 entity.ShortPrefabName.Contains("pine") ||
-								 entity.ShortPrefabName.Contains("juniper") ||
-								 entity.ShortPrefabName.Contains("deadtree") ||
-								 entity.ShortPrefabName.Contains("dead_log") ||
-								 entity.ShortPrefabName.Contains("palm"))
-						{
-							resource = "wood";
-							ptype    = "h";
-						}
-						else if (entity.ShortPrefabName.Contains("minecart"))
-						{
-							resource = "minecart";
-							ptype    = "o";
-						}
-						else if (entity.ShortPrefabName.Contains("supply"))
-						{
-							resource = "supplycrate";
-							ptype    = "o";
-						}
-						else if (entity.ShortPrefabName.Contains("foodbox") || entity.ShortPrefabName.Contains("trash-pile"))
-						{
-							resource = "foodbox";
-							ptype    = "o";
-						}
-						else if (entity.ShortPrefabName.Contains("giftbox"))
-						{
-							resource = "giftbox";
-							ptype    = "o";
-						}
-						else if (entity.ShortPrefabName.Contains("crate"))
-						{
-							resource = "crate";
-							ptype    = "o";
-						}
+					key_found = false;
+				}
+			}
 
-						if (string.IsNullOrEmpty(ptype))
-							Puts("Tell MSPEEDIE no ptype for " + entity.ShortPrefabName);
-						if (player != null && resource != null)
-						{
-							totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
-							GiveReward(player, resource, ptype, totalmultiplier);
-						}
-					}
-					}
-					catch {Puts("Tell MSPEEDIE Error on OKE Try Get Value");}
-					try
+			if (key_found == false || player == null) 
+					return;
+			else
+			{
+				if (resource == null || ptype == null) // heli bradley or chinook not indicated
+				{
+					if (entity.ShortPrefabName.Contains("stone"))
 					{
-						EntityCollectionCache.Remove(entity.net.ID);
+						resource = "stones";
+						ptype    = "h";
 					}
-					catch {Puts("Tell MSpeedie Error on OKE Remove");}
+					else if (entity.ShortPrefabName.Contains("sulfur"))
+					{
+						resource = "sulfur";
+						ptype    = "h";
+					}
+					else if (entity.ShortPrefabName.Contains("-ore") ||
+							 entity.ShortPrefabName.Contains("ore_") ||
+							 entity.ShortPrefabName.Contains(".ore"))
+					{
+						resource = "ore";
+						ptype    = "h";
+					}
+					else if (entity.ShortPrefabName.Contains("cactus"))
+					{
+						resource = "cactus";
+						ptype    = "h";
+					}
+					else if (entity.ShortPrefabName.Contains("driftwood") ||
+							 entity.ShortPrefabName.Contains("douglas_fir") ||
+							 entity.ShortPrefabName.Contains("beech") ||
+							 entity.ShortPrefabName.Contains("birch") ||
+							 entity.ShortPrefabName.Contains("oak") ||
+							 entity.ShortPrefabName.Contains("pine") ||
+							 entity.ShortPrefabName.Contains("juniper") ||
+							 entity.ShortPrefabName.Contains("deadtree") ||
+							 entity.ShortPrefabName.Contains("dead_log") ||
+							 entity.ShortPrefabName.Contains("wood") ||
+							 entity.ShortPrefabName.Contains("palm"))
+					{
+						resource = "wood";
+						ptype    = "h";
+					}
+					else if (entity.ShortPrefabName.Contains("minecart"))
+					{
+						resource = "minecart";
+						ptype    = "o";
+					}
+					else if (entity.ShortPrefabName.Contains("supply"))
+					{
+						resource = "supplycrate";
+						ptype    = "o";
+					}
+					else if (entity.ShortPrefabName.Contains("foodbox") || entity.ShortPrefabName.Contains("trash-pile"))
+					{
+						resource = "foodbox";
+						ptype    = "o";
+					}
+					else if (entity.ShortPrefabName.Contains("giftbox"))
+					{
+						resource = "giftbox";
+						ptype    = "o";
+					}
+					else if (entity.ShortPrefabName.Contains("crate"))
+					{
+						resource = "crate";
+						ptype    = "o";
+					}
+				}
+				if (string.IsNullOrEmpty(ptype))
+					Puts("Tell MSPEEDIE no ptype for " + entity.ShortPrefabName);
+				if (player != null && resource != null)
+				{
+					totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+					GiveReward(player, resource, ptype, null, totalmultiplier);
 				}
 			}
 		}
 
 		private void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
 		{
-			double totalmultiplier = 1;
-			string resource = null;
-			BasePlayer bplayer = null;
-			IPlayer player = null;
-			string ptype = string.Empty;
-
-			if (victim == null || victim.name == null) return;
-			if (info == null || info.Initiator == null || !(info.Initiator is BasePlayer)) return;
-			if (info.Initiator is BaseNpc || info.Initiator is NPCPlayerApex || info.Initiator is NPCPlayer || info.Initiator is NPCMurderer) return;
-
+			BasePlayer bplayer         = null;
+			IPlayer    player          = null;
+			string     resource        = null;
+			string     ptype           = null;
+			string     weaponname      = null;
+			double     totalmultiplier = 1;
+			bool       isFriend        = false;
 			try
 			{
-				bplayer = info.Initiator.ToPlayer();
-				if (bplayer != null)
-					player = bplayer.IPlayer;
+
+				if (victim == null || string.IsNullOrEmpty(victim.name)) return;
+				if (info == null || info.Initiator == null || string.IsNullOrEmpty(info.Initiator.name) || !(info.Initiator is BasePlayer)) return;
+				if (info.Initiator is BaseNpc || info.Initiator is NPCPlayerApex ||
+					info.Initiator is NPCPlayer || info.Initiator is NPCMurderer ||
+					info.Initiator.name.Contains("scarecrow.prefab") ||
+					info.Initiator.name.Contains("/npc/scientist/htn")) return;
+
+				if (!Economics && !ServerRewards) return;
+
+				try
+				{
+					bplayer = info.Initiator.ToPlayer();
+					if (bplayer != null)
+					{
+						player = bplayer.IPlayer;
+						if (player == null)
+							return;
+					}
+				}
+				catch
+				{
+					return;
+				}
+
+				//Puts("OED victim.name:" + victim.name);
+
+				if (player == null)
+				{
+					// check is special case
+					if (victim is BaseHelicopter && helilasthitplayer != null)
+					{
+						player = helilasthitplayer;
+						helilasthitplayer = null;
+					}
+					if (victim is CH47HelicopterAIController && chinooklasthitplayer != null)
+					{
+						player = chinooklasthitplayer;
+						chinooklasthitplayer = null;
+					}
+					if (victim is BradleyAPC && bradleylasthitplayer != null)
+					{
+						player = bradleylasthitplayer;
+						bradleylasthitplayer = null;
+					}
+					else
+						return;  // no one tracked as killing it
+				}
+
+				if (bplayer == null || player == null || player.Id == null)
+					return;
+
+				if (victim.name.Contains("servergibs") || victim.name.Contains("corpse")) return;  // no money for cleaning up the left over crash/corpse
+
+				if (victim.name.Contains("loot-barrel") || victim.name.Contains("loot_barrel") || victim.name.Contains("oil_barrel"))
+				{
+					resource = "barrel";
+					ptype = "o";
+				}
+				else if (victim.name.Contains("foodbox") || victim.name.Contains("trash-pile"))
+				{
+					resource = "foodbox";
+					ptype = "o";
+				}
+				else if (victim.name.Contains("giftbox"))
+				{
+					resource = "giftbox";
+					ptype = "o";
+				}
+				else if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter.prefab"))
+				{
+					resource = "helicopter";
+					ptype = "k";
+				}
+				else if (victim is BradleyAPC || victim.name.Contains("bradleyapc.prefab"))
+				{
+					resource = "bradley";
+					ptype = "k";
+				}
+				else if (victim is CH47HelicopterAIController || victim.name.Contains("ch47.prefab"))
+				{
+					resource = "chinook";
+					ptype = "k";
+				}
+				else if (victim.name.Contains("assets/rust.ai/agents/") && !victim.name.Contains("corpse"))
+				{
+					ptype = "k";
+					if ( victim.name.Contains("stag"))
+					{
+						resource = "stag";
+					}
+					else if (victim.name.Contains("boar"))
+					{
+						resource = "boar";
+					}
+					else if (victim.name.Contains("horse"))
+					{
+						resource = "horse";
+					}
+					else if (victim.name.Contains("bear"))
+					{
+						resource = "bear";
+					}
+					else if (victim.name.Contains("wolf"))
+					{
+						resource = "wolf";
+					}
+					else if (victim.name.Contains("chicken"))
+					{
+						resource = "chicken";
+					}
+					else if (victim.name.Contains("zombie")) // lumped these in with Murderers
+					{
+						if (!NPCReward_Enabled)
+							return;
+						resource = "murderer";
+					}
+					else
+					{
+						Puts("tell mspeedie: OED missing animal: " + victim.name);
+					}
+				}
+				else if (victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is Scientist || victim is NPCMurderer ||
+						victim.name.Contains("scarecrow.prefab") || victim.name.Contains("/npc/scientist/htn"))
+				{
+					ptype = "k";
+					if (!NPCReward_Enabled)
+						return;
+					else if (victim is Scientist || victim.name.Contains("/npc/scientist/htn"))
+					{
+						resource = "scientist";
+					}
+					else if (victim is NPCMurderer || victim.name.Contains("scarecrow.prefab"))
+					{
+						resource = "murderer";
+					}
+					else
+					{
+						resource = "npc";
+					}
+				}
+				else if (victim.ToPlayer() != null && victim.ToPlayer().userID != null)
+				{
+					var victimplayer = victim.ToPlayer();
+
+					if (bplayer.userID == victimplayer.userID)
+						return;  // killed themselves
+					else
+					{
+						if (friendsloaded)
+							isFriend = (bool)Friends?.CallHook("HasFriend", bplayer.userID, victimplayer.userID);
+
+						if (!isFriend && clansloaded)
+						{
+							string pclan = (string)Clans?.CallHook("GetClanOf", bplayer);
+							string vclan = (string)Clans?.CallHook("GetClanOf", victimplayer);
+							if (pclan == vclan)
+								isFriend = true;
+						}
+
+						if (isFriend)
+							return;
+						else
+						{
+							resource = "player";
+							ptype = "k";
+						}
+					}
+				}
+				else if (victim.name == "assets/prefabs/npc/autoturret/autoturret_deployed.prefab")
+				{
+					resource = "autoturret";
+					ptype = "k";
+				}
+				else if (victim.name == "assets/prefabs/npc/sam_site_turret/sam_site_turret_deployed.prefab")
+				{
+					resource = "sam";
+					ptype = "k";
+				}
+				else if (victim.name == "assets/prefabs/deployable/bear trap/beartrap.prefab" ||
+						victim.name == "assets/prefabs/deployable/landmine/landmine.prefab" ||
+						victim.name == "assets/prefabs/deployable/floor spikes/spikes.floor.prefab" ||
+						victim.name == "assets/prefabs/npc/flame turret/flameturret.deployed.prefab" ||
+						victim.name == "assets/prefabs/deployable/single shot trap/guntrap.deployed.prefab" ||
+						victim.name == "assets/bundled/prefabs/static/spikes_static.prefab"
+						)
+				{
+					resource = "trap";
+					ptype = "k";
+				}
+				else if (victim.name.Contains("log"))
+				{
+					resource = "wood";
+					ptype = "h";
+				}
+
+				// nothing to process
+				if (string.IsNullOrEmpty(resource) || string.IsNullOrEmpty(ptype))
+					return;
+				// compute applicable multipliers
+				else if (!(resource == "barrel" ||resource == "wood" || resource.Contains("box")) && (DistanceMultiplier_Enabled || WeaponMultiplier_Enabled))
+				{
+					try
+					{
+						weaponname = info.WeaponPrefab?.ShortPrefabName;
+					}
+					catch 
+					{
+						weaponname = null;
+					}
+
+					if (!string.IsNullOrEmpty(weaponname))
+					{
+						// Puts(weaponname + " GetWeapon: " + GetWeapon(weaponname) + " Distance: " + GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())));
+						totalmultiplier = (DistanceMultiplier_Enabled ? GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())) : 1) *
+											(WeaponMultiplier_Enabled ? GetWeapon(weaponname) : 1) *
+											(happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+					}
+					else
+						totalmultiplier = (DistanceMultiplier_Enabled ? GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())) : 1) *
+											(happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+				}
+				else
+				{
+					totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
+				}
+
+				// check multipliers are not too small or large
+				if (totalmultiplier < 0.001)
+				{
+					Puts("Total multipler is too small for " + resource);
+					return;
+				}
+				else if (totalmultiplier > 10000)
+				{
+					Puts("Total multipler is too large for " + resource);
+					return;
+				}
+
+				// Give Reward
+				GiveReward(player, resource, ptype, null, totalmultiplier);
+
 			}
 			catch
 			{
-				return;
+				Puts("tell mspeedie to Error on: Victim / Killer / prefab name : " + victim.name + " / " + info?.Initiator?.ToPlayer().displayName + " / " + TrimPunctuation(victim.ShortPrefabName.ToLower()));
 			}
-
-			if (!Economics && !ServerRewards) return;
-			if (victim is BuildingBlock || victim is Door ||
-			    victim.name.Contains("trap")   || victim.name.Contains("spike.floor") ||
-				victim.name.Contains("autoturret") ||
-				victim.name.Contains("external") || victim.name.Contains("hatch") ||
-				victim.name.Contains("cupboard.tool.deployed")
-				) return;
-
-			if (player == null)
-			{
-				// check is special case
-				if (victim is BaseHelicopter && helilasthitplayer != null)
-				{
-					player = helilasthitplayer;
-					helilasthitplayer = null;
-				}
-				if (victim is CH47HelicopterAIController && chinooklasthitplayer != null)
-				{
-					player = chinooklasthitplayer;
-					chinooklasthitplayer = null;
-				}
-				if (victim is BradleyAPC && bradleylasthitplayer != null)
-				{
-					player = bradleylasthitplayer;
-					bradleylasthitplayer = null;
-				}
-				else
-					return;  // no one tracked as killing it
-			}
-
-			if (player == null || player.Id == null || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer || info.Initiator.name.Contains("/npc/scientist/htn"))
-				return;
-
-			if (victim.name.Contains("servergibs") || victim.name.Contains("corpse")) return;  // no money for cleaning up the left over crash/corpse
-
-			if (victim.name.Contains("loot-barrel") || victim.name.Contains("loot_barrel") || victim.name.Contains("oil_barrel"))
-			{
-				resource = "barrel";
-				ptype = "o";
-
-			}
-			else if (victim.name.Contains("foodbox") || victim.name.Contains("trash-pile"))
-			{
-				resource = "foodbox";
-				ptype = "o";
-			}
-			else if (victim.name.Contains("giftbox"))
-			{
-				resource = "giftbox";
-				ptype = "o";
-			}
-			else if (victim.name.Contains("log"))
-			{
-				resource = "wood";
-				ptype = "h";
-			}
-			else if (victim.name.Contains("assets/rust.ai/agents/") && !victim.name.Contains("corpse"))
-			{
-				ptype = "k";
-				if ( victim.name.Contains("stag"))
-				{
-					resource = "stag";
-				}
-				else if (victim.name.Contains("boar"))
-				{
-					resource = "boar";
-				}
-				else if (victim.name.Contains("horse"))
-				{
-					resource = "horse";
-				}
-				else if (victim.name.Contains("bear"))
-				{
-					resource = "bear";
-				}
-				else if (victim.name.Contains("wolf"))
-				{
-					resource = "wolf";
-				}
-				else if (victim.name.Contains("chicken"))
-				{
-					resource = "chicken";
-				}
-				else if (victim.name.Contains("zombie")) // lumped these in with Murderers
-				{
-					if (!NPCReward_Enabled)
-						return;
-					resource = "murderer";
-				}
-				else
-				{
-					Puts("tell mspeedie: OED missing animal: " + victim.name);
-				}
-			}
-			else if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter.prefab"))
-			{
-				resource = "helicopter";
-				ptype = "k";
-			}
-			else if (victim is BradleyAPC || victim.name.Contains("bradleyapc.prefab"))
-			{
-				resource = "bradley";
-				ptype = "k";
-			}
-			else if (victim is CH47HelicopterAIController || victim.name.Contains("ch47.prefab"))
-			{
-				resource = "chinook";
-				ptype = "k";
-			}
-			else if (victim.name == "assets/prefabs/npc/autoturret/autoturret_deployed.prefab")
-			{
-				resource = "autoturret";
-				ptype = "k";
-			}
-			else if (victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is Scientist || victim is NPCMurderer ||
-				     victim.name.Contains("scarecrow.prefab") || victim.name.Contains("/npc/scientist/htn"))
-			{
-				ptype = "k";
-				if (!NPCReward_Enabled)
-					return;
-				else if (victim is Scientist)
-				{
-					resource = "scientist";
-				}
-				else if (victim is NPCMurderer || victim.name.Contains("scarecrow.prefab"))
-				{
-					resource = "murderer";
-				}
-				else
-				{
-					resource = "npc";
-				}
-			}
-			if (resource == null && victim.ToPlayer() != null && victim.ToPlayer().userID != null)
-			{
-				ptype = "k";
-				if (info?.Initiator?.ToPlayer().userID == victim.ToPlayer().userID)
-					return;  // killed themselves
-				else
-					resource = "player";
-			}
-
-			if (!(resource == "barrel" ||resource == "wood" || resource.Contains("box")) &&
-				(DistanceMultiplier_Enabled || WeaponMultiplier_Enabled)
-				)
-			{
-				var prefab = info.WeaponPrefab?.ShortPrefabName;
-				
-				// Puts(prefab + " GetWeapon: " + GetWeapon(prefab) + " Distance: " + GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())));
-				totalmultiplier = (DistanceMultiplier_Enabled ? GetDistance(victim.Distance2D(info?.Initiator?.ToPlayer())) : 1) *
-									(WeaponMultiplier_Enabled ? GetWeapon(prefab) : 1) *
-									(happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
-			}
-			else
-			{
-				totalmultiplier = (happyhouractive ? mult_HappyHourMultiplier : 1) * ((VIPMultiplier_Enabled && HasPerm(player, permVIP)) ? mult_VIPMultiplier : 1);
-			}
-
-			if (resource == "player")
-			{
-				ptype = "k";
-				if (player != null && victim.ToPlayer() != null && totalmultiplier > 0.01)
-					RewardForPlayerKill(player, victim.ToPlayer(), totalmultiplier);
-			}
-			else if (player != null && resource != null && totalmultiplier > 0.01)
-				GiveReward(player, resource, ptype, totalmultiplier);
-			else
-				Puts("tell mspeedie to check: V/R/R/T/P: " + victim.name + " : " + resource + " : " + totalmultiplier + " : " + player.Name);
-
 		}
 
-		private void GiveReward(IPlayer player, string reason, string ptype, double multiplier = 1)
+		private void GiveReward(IPlayer player, string reason, string ptype, BasePlayer victim, double multiplier = 1)
 		{
 			double amount = 0;
+			bool success = false;
+
 			// safety checks
-			if (player == null || reason == null || reason == String.Empty ||
-			    multiplier == null || multiplier < 0.001 ||
+			if (player == null || string.IsNullOrEmpty(reason) || multiplier < 0.001 ||
 				player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer)
 				return;
 
@@ -1343,14 +1482,20 @@ namespace Oxide.Plugins
 				amount = rate_scientist;
 			else if (reason == "bradley")
 				amount = rate_bradley;
+			else if (reason == "trap")
+				amount = rate_trap;
 			else if (reason == "autoturret")
 				amount = rate_autoturret;
-			else if (reason == "ActivityReward")
+			else if (reason == "sam")
+				amount = rate_sam;
+			else if (reason == "activity")
 				amount = rate_activityreward;
-			else if (reason == "WelcomeMoney")
+			else if (reason == "welcomemoney")
 				amount = rate_welcomemoney;
 			else if (reason == "npc")
 				amount = rate_npckill;
+			else if (reason == "player")
+				amount = rate_player;
 			else
 			{
 				amount = 0.0;
@@ -1369,29 +1514,40 @@ namespace Oxide.Plugins
 			}
 
 			amount = amount * multiplier;
-			// make sure net amount is not zero
+			// make sure net amount is not zero or too small
 			if (amount == 0)
 			{
-				Puts("Rust Rewards  net amount (amount * multipler) should not be zero. reason:" + reason);
+				Puts("Net amount (amount * multipler) should not be zero. reason:" + reason);
 				return;
 			}
+			else if ((amount < 0.01 && UseEconomicsPlugin) || (amount < 1.0 && UseServerRewardsPlugin))
+				Puts ("Net amount is too small: " + amount);
 
 			//  these use to be both if but it seems odd to me to pay in two currencies at the same rate
 			if (UseEconomicsPlugin)
 			{
-				if (amount > 0)
+				if (reason == "player" && TakeMoneyfromVictim)
+				{
+					if (!(bool)Economics?.Call("Transfer", victim.UserIDString, player.Id, amount))
+					{
+						MessagePlayer(player, Lang("VictimNoMoney", player.Id, victim.displayName), Lang("Prefix"), "k");
+					}
+					else
+						Economics?.Call("Deposit", player.Id, amount);
+				}
+				else
 					Economics?.Call("Deposit", player.Id, amount);
 			}
 			else if (UseServerRewardsPlugin)
 			{
 				amount = Math.Round(amount,0);
-				if (amount > 0)
-					ServerRewards?.Call("AddPoints", player.Id, (int)amount);
-				else
+				if (reason == "player" && TakeMoneyfromVictim)
 				{
-					Puts("Rust Rewards Amount Zero! " + reason);
-					return; // too small an amount to process
+					ServerRewards?.Call("AddPoints", player.Id, (int)(amount));
+					ServerRewards?.Call("TakePoints", new object[] { victim.userID, (int)(amount) });
 				}
+				else
+					ServerRewards?.Call("AddPoints", player.Id, (int)amount);
 			}
 			if (ShowcurrencySymbol)
 				MessagePlayer(player, Lang(reason, player.Id, amount.ToString("C", CurrencyCulture)), Lang("Prefix"), ptype);
@@ -1409,73 +1565,6 @@ namespace Oxide.Plugins
 				Puts(player.Name + " got " + amount + " for " + reason);
 		}
 
-		private void RewardForPlayerKill(IPlayer player, BasePlayer victim, double multiplier = 1)
-		{
-
-			double amount = 0;
-			bool success = false;
-			bool isFriend = false;
-
-			// safety checks
-			if (player == null || victim == null || multiplier < 0.001 || rate_player <= 0.01 ||
-			    player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer ||
-			    victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is NPCMurderer) return;
-
-
-			amount = rate_player * multiplier;
-
-			if (friendsloaded)
-				isFriend = (bool)Friends?.CallHook("HasFriend", player.Id, victim.userID);
-			if (!isFriend && clansloaded)
-			{
-				string pclan = (string)Clans?.CallHook("GetClanOf", player);
-				string vclan = (string)Clans?.CallHook("GetClanOf", victim);
-				if (pclan == vclan)
-					isFriend = true;
-			}
-			if (!isFriend)
-			{
-				if (UseEconomicsPlugin && economicsloaded) // Economics
-				{
-					if (TakeMoneyfromVictim)
-					{
-						if (!(bool)Economics?.Call("Transfer", victim.UserIDString, player.Id, amount))
-						{
-							MessagePlayer(player, Lang("VictimNoMoney", player.Id, victim.displayName), Lang("Prefix"), "k");
-							success = false;
-						}
-						else
-							success = true;
-					}
-					else
-					{
-						Economics?.Call("Deposit", player.Id, amount);
-						success = true;
-					}
-				}
-				if (UseServerRewardsPlugin && serverrewardsloaded) //ServerRewards
-				{
-					if (TakeMoneyfromVictim)
-						ServerRewards?.Call("TakePoints", new object[] { victim.userID, rate_player * multiplier });
-					ServerRewards?.Call("AddPoints", player.Id, (int)(rate_player * multiplier));
-					success = true;
-				}
-
-				if (success) //Send message if transaction was successful
-				{
-
-					if (ShowcurrencySymbol)
-						MessagePlayer(player, Lang("player", player.Id, amount.ToString("C", CurrencyCulture), victim.displayName), Lang("Prefix") , "k");
-					else
-						MessagePlayer(player, Lang("player", player.Id, amount, victim.displayName), Lang("Prefix"), "k");
-					if (DoLogging)
-						LogToFile(Name, $"[{DateTime.Now}] " + player.Name + " got " + amount + " for killing " + victim.displayName, this);
-					if (PrintInConsole)
-						Puts(player.Name + " got " + amount + " for killing " + victim.displayName);
-				}
-			}
-
-		}
 		#region Commands
 		[ChatCommand("rrm")]
 		void ChatCommandRRM(BasePlayer player, string command, string[] args)
@@ -1528,15 +1617,25 @@ namespace Oxide.Plugins
 						pstate = true;
 				}
 			}
-			
+
 			try
 			{
-			playerPrefs.TryGetValue(iplayer.Id, out pref);
+				if (playerPrefs.ContainsKey(iplayer.Id))
+					playerPrefs.TryGetValue(iplayer.Id, out pref);
+				else
+				{
+					pref = "hko";
+					playerPrefs.Add(iplayer.Id,pref);
+				}
 			}
 			catch
 			{
-				pref = "hko";
-				playerPrefs.Add(iplayer.Id,pref);
+				try
+				{
+					pref = "hko";
+					playerPrefs.Add(iplayer.Id,pref);
+				}
+				catch {}
 			}
 
 			if (pstate == true && !pref.Contains(ptype))
@@ -1554,7 +1653,7 @@ namespace Oxide.Plugins
 				pstateString = "on";
 			else
 				pstateString = "off";
-			
+
 			if (ptype == "h")
 				ptypeString = "harvesting";
 			else if (ptype == "k")
@@ -1562,9 +1661,9 @@ namespace Oxide.Plugins
 			else if (ptype == "o")
 				ptypeString = "opening";
 
-			
+
 			MessagePlayer(iplayer, Lang("rrm change", iplayer.Id, ptypeString, pstateString), Lang("Prefix"), null);
-			Puts (pref + " : " + pstateString + " : " + ptype);
+			// Puts (pref + " : " + pstateString + " : " + ptype);
 		}
 		#endregion
 

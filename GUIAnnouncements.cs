@@ -1844,7 +1844,7 @@ namespace Oxide.Plugins
                 var entityNetID = entity.net.ID;
                 if (helicopterDespawnAnnouncement)
                     HeliNetIDs.Add(entityNetID);
-                if (helicopterDestroyedAnnouncementWithDestroyer && heliLastHitPlayer != null)
+                if (helicopterDestroyedAnnouncementWithDestroyer && !string.IsNullOrEmpty(heliLastHitPlayer))
                 {
                     CreateAnnouncement(helicopterDestroyedAnnouncementWithDestroyerText.Replace("{playername}", heliLastHitPlayer), helicopterDestroyedAnnouncementBannerColor, helicopterDestroyedAnnouncementTextColor);
                     heliLastHitPlayer = String.Empty;
@@ -1860,7 +1860,7 @@ namespace Oxide.Plugins
                 var entityNetID = entity.net.ID;
                 if (bradleyDespawnAnnouncement)
                     BradleyNetIDs.Add(entityNetID);
-                if (bradleyDestroyedAnnouncementWithDestroyer && bradleyLastHitPlayer != null)
+                if (bradleyDestroyedAnnouncementWithDestroyer && !string.IsNullOrEmpty(bradleyLastHitPlayer))
                 {
                     CreateAnnouncement(bradleyDestroyedAnnouncementWithDestroyerText.Replace("{playername}", bradleyLastHitPlayer), bradleyDestroyedAnnouncementBannerColor, bradleyDestroyedAnnouncementTextColor);
                     bradleyLastHitPlayer = String.Empty;
@@ -1878,7 +1878,7 @@ namespace Oxide.Plugins
                 var entityNetID = entity.net.ID;
                 if (chinookDespawnAnnouncement)
                     ChinookNetIDs.Add(entityNetID);
-                if (chinookDestroyedAnnouncementWithDestroyer && chinookLastHitPlayer != null)
+                if (chinookDestroyedAnnouncementWithDestroyer && string.IsNullOrEmpty(chinookLastHitPlayer))
                 {
                     CreateAnnouncement(chinookDestroyedAnnouncementWithDestroyerText.Replace("{playername}", chinookLastHitPlayer), chinookDestroyedAnnouncementBannerColor, chinookDestroyedAnnouncementTextColor);
                     chinookLastHitPlayer = String.Empty;
