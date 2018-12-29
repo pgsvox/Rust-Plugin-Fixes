@@ -16,7 +16,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "RFC1920", "1.0.34", ResourceId = 1832)]
+    [Info("NTeleportation", "RFC1920", "1.0.38", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
         private const string NewLine = "\n";
@@ -81,7 +81,14 @@ namespace Oxide.Plugins
             public bool HomesEnabled { get; set; }
             public bool TPREnabled { get; set; }
             public bool TownEnabled { get; set; }
-            public bool InterruptTPOnHurt { get; set; }
+			public bool InterruptTPOnBalloon { get; set; }
+			public bool InterruptTPOnCraft { get; set; }
+			public bool InterruptTPOnHurt { get; set; }
+			public bool InterruptTPOnLift { get; set; }
+			public bool InterruptTPOnMounted { get; set; }
+			public bool InterruptTPOnSafe { get; set; }
+			public bool InterruptTPOnShip { get; set; }
+			public bool InterruptTPOnSwim { get; set; }
             public Dictionary<string, string> BlockedItems { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             public string BypassCMD { get; set; }
             public bool UseEconomics { get; set; }
@@ -204,7 +211,14 @@ namespace Oxide.Plugins
                     HomesEnabled = true,
                     TPREnabled = true,
                     TownEnabled = true,
-                    InterruptTPOnHurt = true,
+					InterruptTPOnBalloon = true,
+					InterruptTPOnCraft = true,
+					InterruptTPOnHurt = true,
+					InterruptTPOnLift = true,
+					InterruptTPOnMounted = true,
+					InterruptTPOnSafe = true,
+					InterruptTPOnShip = true,
+					InterruptTPOnSwim = true,
                     BypassCMD = "pay",
                     UseEconomics = false,
                     UseServerRewards = false
@@ -351,6 +365,7 @@ namespace Oxide.Plugins
                 {"TPSwimming", "You can't teleport while swimming!"},
                 {"TPCargoShip", "You can't teleport from the cargo ship!"},
                 {"TPHotAirBalloon", "You can't teleport to or from a hot air balloon!"},
+                {"TPLift", "You can't teleport while in an elevator or bucket lift!"},
                 {"TPSafeZone", "You can't teleport from a safezone!"},
                 {"TPCrafting", "You can't teleport while crafting!"},
                 {"TPBlockedItem", "You can't teleport while carrying: {0}!"},
@@ -2138,7 +2153,11 @@ namespace Oxide.Plugins
                 if (IsAllowed(player)) PrintMsgL(player, "SyntaxCommandTownAdmin");
                 return;
             }
-
+            if (!configData.Settings.TownEnabled)
+            {
+                PrintMsgL(player, "TownTPNotSet");
+                return;
+            }
             if (configData.Town.Location == default(Vector3))
             {
                 PrintMsgL(player, "TownTPNotSet");
@@ -2458,7 +2477,7 @@ namespace Oxide.Plugins
             teleporting.Add(player.userID);
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "StartLoading");
-            player.SetParent(null,0);  // allows teleport off moving objects
+			player.SetParent(null,0);  // allows teleport off moving objects
             StartSleeping(player);
             player.MovePosition(position);
             if (player.net?.connection != null)
@@ -2554,24 +2573,28 @@ namespace Oxide.Plugins
 
         private string CheckPlayer(BasePlayer player, bool build = false, bool craft = false)
         {
-            //var onship = player.GetComponentInParent<CargoShip>();
-            //var onballoon = player.GetComponentInParent<HotAirBalloon>();
-            //if (player.isMounted)
-            //    return "TPMounted";
-            //if (player.IsWounded())
-            //    return "TPWounded";
-            //if (onship)
-            //    return "TPCargoShip";
-            //if (onballoon)
-            //    return "TPHotAirBalloon";
-            //if (player.InSafeZone())
-            //    return "TPSafeZone";
-            //if (player.IsSwimming())
-            //    return "TPSwimming";
+            var onship = player.GetComponentInParent<CargoShip>();
+            var onballoon = player.GetComponentInParent<HotAirBalloon>();
+            var inlift = player.GetComponentInParent<Lift>();
+
             if (!player.IsAlive())
                 return "TPDead";
+            if (player.isMounted && configData.Settings.InterruptTPOnMounted == true)
+                return "TPMounted";
+            if (player.IsWounded() && configData.Settings.InterruptTPOnHurt == true)
+                return "TPWounded";
             if (!build && !player.CanBuild())
                 return "TPBuildingBlocked";
+            if (player.IsSwimming() && configData.Settings.InterruptTPOnSwim == true)
+                return "TPSwimming";
+            if (onship && configData.Settings.InterruptTPOnShip == true)
+                return "TPCargoShip";
+            if (onballoon && configData.Settings.InterruptTPOnBalloon == true)
+                return "TPHotAirBalloon";
+            if (inlift  && configData.Settings.InterruptTPOnLift == true)
+                return "TPLift";
+            if (player.InSafeZone() && configData.Settings.InterruptTPOnSafe == true)
+                return "TPSafeZone";
             if (!craft && player.inventory.crafting.queue.Count > 0)
                 return "TPCrafting";
             return null;
