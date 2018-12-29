@@ -16,7 +16,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "RFC1920", "1.0.38", ResourceId = 1832)]
+    [Info("NTeleportation", "RFC1920", "1.0.39", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
         private const string NewLine = "\n";
@@ -366,11 +366,14 @@ namespace Oxide.Plugins
                 {"TPCargoShip", "You can't teleport from the cargo ship!"},
                 {"TPHotAirBalloon", "You can't teleport to or from a hot air balloon!"},
                 {"TPLift", "You can't teleport while in an elevator or bucket lift!"},
+                {"TPBucketLift", "You can't teleport while in a bucket lift!"},
+                {"TPRegLift", "You can't teleport while in an elevator!"},
                 {"TPSafeZone", "You can't teleport from a safezone!"},
                 {"TPCrafting", "You can't teleport while crafting!"},
                 {"TPBlockedItem", "You can't teleport while carrying: {0}!"},
                 {"TownTP", "You teleported to town!"},
                 {"TownTPNotSet", "Town is currently not set!"},
+                {"TownTPDisabled", "Town is currently not enabled!"},
                 {"TownTPLocation", "You have set the town location set to {0}!"},
                 {"TownTPStarted", "Teleporting to town in {0} seconds!"},
                 {"TownTPCooldown", "Your teleport is currently on cooldown. You'll have to wait {0} for your next teleport."},
@@ -2147,15 +2150,15 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "TownTPLocation", configData.Town.Location);
                 return;
             }
+            if (!configData.Settings.TownEnabled)
+            {
+                PrintMsgL(player, "TownTPDisabled");
+                return;
+            }
             if (args.Length == 1 && (args[0].ToLower() != configData.Settings.BypassCMD.ToLower()))
             {
                 PrintMsgL(player, "SyntaxCommandTown");
                 if (IsAllowed(player)) PrintMsgL(player, "SyntaxCommandTownAdmin");
-                return;
-            }
-            if (!configData.Settings.TownEnabled)
-            {
-                PrintMsgL(player, "TownTPNotSet");
                 return;
             }
             if (configData.Town.Location == default(Vector3))
@@ -2576,26 +2579,29 @@ namespace Oxide.Plugins
             var onship = player.GetComponentInParent<CargoShip>();
             var onballoon = player.GetComponentInParent<HotAirBalloon>();
             var inlift = player.GetComponentInParent<Lift>();
+            var pos = player.transform.position;
 
             if (!player.IsAlive())
                 return "TPDead";
-            if (player.isMounted && configData.Settings.InterruptTPOnMounted == true)
+            else if (player.isMounted && configData.Settings.InterruptTPOnMounted == true)
                 return "TPMounted";
-            if (player.IsWounded() && configData.Settings.InterruptTPOnHurt == true)
+            else if (player.IsWounded() && configData.Settings.InterruptTPOnHurt == true)
                 return "TPWounded";
-            if (!build && !player.CanBuild())
+            else if (!build && !player.CanBuild())
                 return "TPBuildingBlocked";
-            if (player.IsSwimming() && configData.Settings.InterruptTPOnSwim == true)
+            else if (player.IsSwimming() && configData.Settings.InterruptTPOnSwim == true)
                 return "TPSwimming";
-            if (onship && configData.Settings.InterruptTPOnShip == true)
+            else if (onship && configData.Settings.InterruptTPOnShip == true)
                 return "TPCargoShip";
-            if (onballoon && configData.Settings.InterruptTPOnBalloon == true)
+            else if (onballoon && configData.Settings.InterruptTPOnBalloon == true)
                 return "TPHotAirBalloon";
-            if (inlift  && configData.Settings.InterruptTPOnLift == true)
-                return "TPLift";
-            if (player.InSafeZone() && configData.Settings.InterruptTPOnSafe == true)
+            else if (inlift && configData.Settings.InterruptTPOnLift == true)
+                return "TPBucketLift";
+            else if(GetLift(pos) && configData.Settings.InterruptTPOnLift == true)
+                return "TPRegLift";
+            else if (player.InSafeZone() && configData.Settings.InterruptTPOnSafe == true)
                 return "TPSafeZone";
-            if (!craft && player.inventory.crafting.queue.Count > 0)
+            else if (!craft && player.inventory.crafting.queue.Count > 0)
                 return "TPCrafting";
             return null;
         }
@@ -2753,6 +2759,17 @@ namespace Oxide.Plugins
                 done = true;
             }
             return done ? sourcePos : newPos;
+        }
+
+        private bool GetLift(Vector3 position)
+        {
+            List<ProceduralLift> nearObjectsOfType = new List<ProceduralLift>();
+            Vis.Entities<ProceduralLift>(position, 0.5f, nearObjectsOfType);
+            if (nearObjectsOfType.Count > 0)
+            {
+                return true;
+            }
+            return false;
         }
 
         private Vector3 GetGroundBuilding(Vector3 sourcePos)
