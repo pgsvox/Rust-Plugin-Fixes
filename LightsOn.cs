@@ -6,6 +6,7 @@ using Oxide.Core.Plugins;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading.Tasks;
 using System;
 using System.IO;
 using System.Linq;
@@ -13,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Lights On", "mspeedie", "1.4.1")]
+    [Info("Lights On", "mspeedie", "1.4.2")]
     [Description("Toggle lights on/off either as configured or by name.")]
     public class LightsOn : CovalencePlugin
 	//RustPlugin
@@ -356,6 +357,28 @@ namespace Oxide.Plugins
 				return false;
         }
 
+        bool IsLightToggle(string prefabName)
+        {
+			if (lantern_name.Contains(prefabName))
+				return true;
+			else if (tunalight_name.Contains(prefabName))
+				return true;
+			//else if (jackolanternangry_name.Contains(prefabName))
+			//	return true;
+			//else if (jackolanternhappy_name.Contains(prefabName))
+			//	return true;
+			//else if (largecandleset_name.Contains(prefabName))
+			//	return true;
+			//else if (smallcandleset_name.Contains(prefabName))
+			//	return true;
+			//else if (searchlight_name.Contains(prefabName))
+			//	return true;
+			//else if (simplelight_name.Contains(prefabName))
+			//	return true;
+			else
+				return false;
+        }
+
         bool IsLightPrefabName(string prefabName)
         {
             if (ceilinglight_name.Contains(prefabName))
@@ -565,7 +588,7 @@ namespace Oxide.Plugins
                         continue;
 					else if (state == false && ProtectShortPrefabName(prefabName))
 						continue;
-					
+
 					// not super efficient find a better way
 					if (prefabName != "all" &&
 					   (furnace_name.Contains(prefabName) ||
@@ -618,10 +641,9 @@ namespace Oxide.Plugins
 
 				foreach (SearchLight search_light in searchlights)
 				{
-					if (!(search_light == null || search_light.IsDestroyed || search_light.IsOn() == state))
+					if (search_light != null && !search_light.IsDestroyed && search_light.IsOn() != state)
  					{
 						search_light.SetFlag(BaseEntity.Flags.On, state);
-						search_light.secondsRemaining = 99999999;
 					}
 				}
 			}
@@ -631,7 +653,7 @@ namespace Oxide.Plugins
 				Candle[] candles = UnityEngine.Object.FindObjectsOfType<Candle>() as Candle[];
 				foreach (Candle candle in candles)
 				{
-					if (!candle == null || candle.IsDestroyed || candle.IsOn() == state)
+					if (candle != null && !candle.IsDestroyed && candle.IsOn() != state)
  					{
 						candle.SetFlag(BaseEntity.Flags.On, state);
 					}
@@ -644,7 +666,7 @@ namespace Oxide.Plugins
 
 				foreach (CeilingLight ceiling_light in ceilinglights)
 				{
-					if (!(ceiling_light == null || ceiling_light.IsDestroyed || ceiling_light.IsOn() == state))
+					if (ceiling_light != null && !ceiling_light.IsDestroyed && ceiling_light.IsOn() != state)
  					{
 						ceiling_light.SetFlag(BaseEntity.Flags.On, state);
 					}
@@ -657,7 +679,7 @@ namespace Oxide.Plugins
 
 				foreach (SimpleLight simple_light in simplelights)
 				{
-					if (!(simple_light == null || simple_light.IsDestroyed || simple_light.IsOn() == state))
+					if (simple_light != null && !simple_light.IsDestroyed && simple_light.IsOn() != state)
  					{
 						simple_light.SetFlag(BaseEntity.Flags.On, state);
 					}
@@ -804,40 +826,71 @@ namespace Oxide.Plugins
         {
 			string ShortPrefabName = item?.parent?.parent?.info?.shortname ?? item?.GetRootContainer()?.entityOwner?.ShortPrefabName;
 			BasePlayer player = null;
-			string entityId = null;
 
-			if (string.IsNullOrEmpty(ShortPrefabName))
+			if (string.IsNullOrEmpty(ShortPrefabName) || !(IsHatPrefabName(ShortPrefabName)))
+			{
+				if (IsHatPrefabName(ShortPrefabName)) Puts ("Hat but no prefabname");
 				return;
-            else if (IsHatPrefabName(ShortPrefabName))
+			}
+            else
 			{
 				try
 				{
 					player = item?.GetRootContainer()?.playerOwner;
-					entityId = item?.GetRootContainer()?.entityOwner?.OwnerID.ToString();
 				}
 				catch
 				{
 					player = null;
-					entityId = null;
 				}
 
-				if (string.IsNullOrEmpty(player.UserIDString) && string.IsNullOrEmpty(entityId))
+				if (player == null && string.IsNullOrEmpty(player.UserIDString))
 				{
-					//Puts("OnItemUse no perm");
 					return;  // no owner so no permission
 				}
-				try
+				if (permission.UserHasPermission(player.UserIDString, perm_freelights))
 				{
-					if (permission.UserHasPermission(player.UserIDString, perm_freelights) ||
-						permission.UserHasPermission(entityId, perm_freelights))
-						item.amount += amount;
-				}
-				catch
-				{
-					return;
+					item.amount += amount;
 				}
 			}
 			return;
+		}
+
+		object OnOvenToggle(BaseOven oven, BasePlayer player)
+		{
+			string cleanedname = null;
+			if (oven == null || string.IsNullOrEmpty(oven.ShortPrefabName) ||
+				player == null || player.UserIDString == null)
+				return null;
+			else
+			{
+				cleanedname = CleanedName(oven.ShortPrefabName);
+				//Puts(oven.ShortPrefabName + " : " + cleanedname + " : " + oven.IsOn());
+			}
+
+			if (!permission.UserHasPermission(player.UserIDString, perm_freelights) ||
+				!IsLightToggle(cleanedname) 
+				//(!IsLightPrefabName(cleanedname)) // && !(IsOvenPrefabName(cleanedname) && ProcessShortPrefabName(oven.ShortPrefabName))))
+				)
+			{
+				return null;
+			}
+			else if (oven.IsOn() != true)
+			{
+				//Puts("off going on and allowed " +  oven.temperature.ToString() + " : " + oven.cookingTemperature);
+				oven.SetFlag(BaseEntity.Flags.On, true);
+				oven.StopCooking();
+				oven.allowByproductCreation = false;
+				oven.SetFlag(BaseEntity.Flags.On, true);
+			}
+			else
+			{
+				//Puts("on going off and allowed " +  oven.temperature.ToString() + " : " + oven.cookingTemperature);
+				oven.SetFlag(BaseEntity.Flags.On, false);
+				oven.StopCooking();
+				oven.SetFlag(BaseEntity.Flags.On, false);
+			}
+			// catch all
+			return null;
 		}
 
 		// automatically set lights on that are deployed if the lights are in the on state
@@ -941,8 +994,8 @@ namespace Oxide.Plugins
 
 					if(string.IsNullOrEmpty(prefabName))
 						prefabName = "all";
-					else if (prefabName != "all" && 
-							!IsLightPrefabName(prefabName) && 
+					else if (prefabName != "all" &&
+							!IsLightPrefabName(prefabName) &&
 							!CanCookShortPrefabName(prefabName) &&
 							!IsDevicePrefabName(prefabName)
 							)
@@ -966,7 +1019,7 @@ namespace Oxide.Plugins
 					if (IsLightPrefabName(prefabName) || CanCookShortPrefabName(CleanedName(prefabName)))
 						ProcessLights(state, prefabName);
 				}
-	
+
 				if (state)
 					player.Message(String.Concat(Lang("prefix") , Lang("lights on", player.Id)) + " " + prefabName);
 				else

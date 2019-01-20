@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Linq;
 using Facepunch;
 using Newtonsoft.Json;
@@ -13,18 +15,22 @@ using Oxide.Core.Plugins;
 using Oxide.Game.Rust;
 using Rust;
 using UnityEngine;
+using static UnityEngine.Vector3;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "RFC1920", "1.0.39", ResourceId = 1832)]
+    [Info("NTeleportation", "RFC1920", "1.0.45", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
+        private static readonly Vector3 Up = up;
+        private static readonly Vector3 Down = down;
         private const string NewLine = "\n";
         private const string ConfigDefaultPermVip = "nteleportation.vip";
         private const string PermDeleteHome = "nteleportation.deletehome";
         private const string PermHomeHomes = "nteleportation.homehomes";
         private const string PermImportHomes = "nteleportation.importhomes";
         private const string PermRadiusHome = "nteleportation.radiushome";
+        private const string PermTpT = "nteleportation.tpt";
         private const string PermTp = "nteleportation.tp";
         private const string PermTpB = "nteleportation.tpb";
         private const string PermTpConsole = "nteleportation.tpconsole";
@@ -61,6 +67,9 @@ namespace Oxide.Plugins
         private readonly Dictionary<ulong, BasePlayer> PlayersRequests = new Dictionary<ulong, BasePlayer>();
         private readonly Dictionary<int, string> ReverseBlockedItems = new Dictionary<int, string>();
         private readonly HashSet<ulong> teleporting = new HashSet<ulong>();
+        private SortedDictionary<string, Vector3> monPos  = new SortedDictionary<string, Vector3>();
+        private SortedDictionary<string, Vector3> monSize = new SortedDictionary<string, Vector3>();
+        private SortedDictionary<string, Vector3> cavePos  = new SortedDictionary<string, Vector3>();
 
         [PluginReference]
         private Plugin Clans, Economics, ServerRewards, Friends, RustIO;
@@ -89,10 +98,12 @@ namespace Oxide.Plugins
 			public bool InterruptTPOnSafe { get; set; }
 			public bool InterruptTPOnShip { get; set; }
 			public bool InterruptTPOnSwim { get; set; }
+            public bool InterruptTPOnMonument { get; set; }
             public Dictionary<string, string> BlockedItems { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             public string BypassCMD { get; set; }
             public bool UseEconomics { get; set; }
             public bool UseServerRewards { get; set; }
+            public bool WipeOnUpgrade { get; set; }
         }
 
         class AdminSettingsData
@@ -211,17 +222,19 @@ namespace Oxide.Plugins
                     HomesEnabled = true,
                     TPREnabled = true,
                     TownEnabled = true,
-					InterruptTPOnBalloon = true,
+					InterruptTPOnBalloon = false,
 					InterruptTPOnCraft = true,
 					InterruptTPOnHurt = true,
 					InterruptTPOnLift = true,
 					InterruptTPOnMounted = true,
-					InterruptTPOnSafe = true,
-					InterruptTPOnShip = true,
-					InterruptTPOnSwim = true,
+					InterruptTPOnSafe = false,
+					InterruptTPOnShip = false,
+					InterruptTPOnSwim = false,
+					InterruptTPOnMonument = false,
                     BypassCMD = "pay",
                     UseEconomics = false,
-                    UseServerRewards = false
+                    UseServerRewards = false,
+					WipeOnUpgrade = false
                 },
                 Admin = new AdminSettingsData
                 {
@@ -356,8 +369,8 @@ namespace Oxide.Plugins
                 {"TPRLimitReached", "You have reached the daily limit of {0} teleport requests today!"},
                 {"TPRAmount", "You have {0} teleport requests left today!"},
                 {"TPRTarget", "Your target is currently not available!"},
-                {"TPDead", "You can't teleport while being dead!"},
-                {"TPWounded", "You can't teleport while being wounded!"},
+                {"TPDead", "You can't teleport while dead!"},
+                {"TPWounded", "You can't teleport while wounded!"},
                 {"TPMounted", "You can't teleport while seated!"},
                 {"TPBuildingBlocked", "You can't teleport while in a building blocked zone!"},
                 {"TPTargetBuildingBlocked", "You can't teleport in a building blocked zone!"},
@@ -371,6 +384,8 @@ namespace Oxide.Plugins
                 {"TPSafeZone", "You can't teleport from a safezone!"},
                 {"TPCrafting", "You can't teleport while crafting!"},
                 {"TPBlockedItem", "You can't teleport while carrying: {0}!"},
+				{"TooCloseToMon", "You can't teleport so close to the {0}!"},
+				{"TooCloseToCave", "You can't teleport so close to a cave!"},
                 {"TownTP", "You teleported to town!"},
                 {"TownTPNotSet", "Town is currently not set!"},
                 {"TownTPDisabled", "Town is currently not enabled!"},
@@ -470,6 +485,7 @@ namespace Oxide.Plugins
                         "Daily amount of teleports: {1}"
                     })
                 },
+				{"NotValidTPT", "Not A valid Team or Clan member, try /tpr instead."},
                 {"PlayerNotFound", "The specified player couldn't be found please try again!"},
                 {"MultiplePlayers", "Found multiple players: {0}"},
                 {"CantTeleportToSelf", "You can't teleport to yourself!"},
@@ -624,6 +640,14 @@ namespace Oxide.Plugins
                     })
                 },
                 {
+                    "SyntaxCommandTPT", string.Join(NewLine, new[]
+                    {
+                        "A Syntax Error Occurred!",
+                        "You can only use the /tpt command as follows:",
+                        "/tpt \"player name\" - Teleports you to a team or clan member."
+                    })
+                },
+                {
                     "SyntaxCommandTPA", string.Join(NewLine, new[]
                     {
                         "A Syntax Error Occurred!",
@@ -713,6 +737,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermImportHomes, this);
             permission.RegisterPermission(PermRadiusHome, this);
             permission.RegisterPermission(PermTp, this);
+            permission.RegisterPermission(PermTpT, this);
             permission.RegisterPermission(PermTpB, this);
             permission.RegisterPermission(PermTpConsole, this);
             permission.RegisterPermission(PermTpHome, this);
@@ -745,6 +770,8 @@ namespace Oxide.Plugins
                 if (!permission.PermissionExists(key, this)) permission.RegisterPermission(key, this);
             foreach (var key in configData.Town.VIPDailyLimits.Keys)
                 if (!permission.PermissionExists(key, this)) permission.RegisterPermission(key, this);
+
+            FindMonuments();
         }
 
         private DynamicConfigFile GetFile(string name)
@@ -876,6 +903,97 @@ namespace Oxide.Plugins
             changedAdmin = true;
             PrintMsgL(player, "AdminTPBackSave");
         }
+
+        string RandomString()
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+            List<char> charList = chars.ToList();
+
+            string random = "";
+
+            for (int i = 0; i <= UnityEngine.Random.Range(5, 10); i++)
+                random = random + charList[UnityEngine.Random.Range(0, charList.Count - 1)];
+
+            return random;
+        }
+        // Modified from MonumentFinder.cs by PsychoTea
+        void FindMonuments()
+        {
+            foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
+            {
+                if(monument.name.Contains("power_sub")) continue;
+                string name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
+                if(monPos.ContainsKey(name)) continue;
+                if(cavePos.ContainsKey(name)) name = name + RandomString();
+
+                var width = monument.Bounds.extents;
+                if(monument.name.Contains("cave"))
+                {
+                    cavePos.Add(name, monument.transform.position);
+                }
+                else
+                {
+                    monPos.Add(name, monument.transform.position);
+                    monSize.Add(name, width);
+                }
+
+            }
+            monPos.OrderBy(x => x.Key);
+            monSize.OrderBy(x => x.Key);
+            cavePos.OrderBy(x => x.Key);
+        }
+
+
+        [ChatCommand("tpt")]
+        private void cmdChatTeleportTeam(BasePlayer player, string command, string[] args)
+        {
+            if (!IsAllowedMsg(player, PermTpT))
+				return;
+
+			if (args.Length < 1 || string.IsNullOrEmpty(args[0]))
+			{
+				PrintMsgL(player, "SyntaxCommandTPT");
+				return;
+			}
+			else
+			{
+				BasePlayer target = null;
+				string PlayerClan = null;
+				string TargetClan = null;
+
+				target = FindPlayersSingle(args[0], player);
+                if (target == null)
+					return;
+                else if (target == player)
+                {
+                    PrintMsgL(player, "CantTeleportToSelf");
+                    return;
+                }
+
+				PlayerClan = Clans?.Call<string> ("GetClanOf", player);
+				TargetClan = Clans?.Call<string> ("GetClanOf", target);
+
+				if ((string.IsNullOrEmpty(PlayerClan) ||
+					 string.IsNullOrEmpty(TargetClan) ||
+					 PlayerClan != TargetClan) &&
+					(player.currentTeam == 0 ||
+					 target.currentTeam == 0 ||
+					 player.currentTeam != target.currentTeam))
+				{
+					PrintMsgL(player, "NotValidTPT");
+					return;
+				}
+				else
+				{
+					// call "tpr"
+			        cmdChatTeleportRequest(player, "notpa", args);
+
+					// call "tpa"
+					string[] x = null;
+					cmdChatTeleportAccept(target, "notpa", x);
+				}
+			}
+		}
 
         [ChatCommand("tp")]
         private void cmdChatTeleport(BasePlayer player, string command, string[] args)
@@ -1119,7 +1237,7 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "SyntaxCommandSetHome");
                 return;
             }
-            var err = CheckPlayer(player, false, CanCraftHome(player));
+            var err = CheckPlayer(player, false, CanCraftHome(player), true);
             if (err != null)
             {
                 PrintMsgL(player, $"Home{err}");
@@ -1398,7 +1516,7 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "SyntaxCommandHome");
                 return;
             }
-            var err = CheckPlayer(player, configData.Home.UsableOutOfBuildingBlocked, CanCraftHome(player));
+            var err = CheckPlayer(player, configData.Home.UsableOutOfBuildingBlocked, CanCraftHome(player), true);
             if (err != null)
             {
                 PrintMsgL(player, err);
@@ -1521,7 +1639,7 @@ namespace Oxide.Plugins
                 OriginPlayer = player,
                 Timer = timer.Once(countdown, () =>
                 {
-                    err = CheckPlayer(player, configData.Home.UsableOutOfBuildingBlocked, CanCraftHome(player));
+                    err = CheckPlayer(player, configData.Home.UsableOutOfBuildingBlocked, CanCraftHome(player), true);
                     if (err != null)
                     {
                         PrintMsgL(player, "Interrupted");
@@ -1693,7 +1811,7 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "CantTeleportToSelf");
                 return;
             }
-            var err = CheckPlayer(player, configData.TPR.UsableOutOfBuildingBlocked, CanCraftTPR(player));
+            var err = CheckPlayer(player, configData.TPR.UsableOutOfBuildingBlocked, CanCraftTPR(player), true);
             if (err != null)
             {
                 PrintMsgL(player, err);
@@ -1828,14 +1946,15 @@ namespace Oxide.Plugins
             PlayersRequests[target.userID] = player;
             PendingRequests[target.userID] = timer.Once(configData.TPR.RequestDuration, () => { RequestTimedOut(player, target); });
             PrintMsgL(player, "Request", target.displayName);
-            PrintMsgL(target, "RequestTarget", player.displayName);
+            if (string.IsNullOrEmpty(command) || command != "notpa")
+				PrintMsgL(target, "RequestTarget", player.displayName);
         }
 
         [ChatCommand("tpa")]
         private void cmdChatTeleportAccept(BasePlayer player, string command, string[] args)
         {
             if (!configData.Settings.TPREnabled) return;
-            if (args.Length != 0)
+            if ((string.IsNullOrEmpty(command) || command != "notpa") && args.Length != 0)
             {
                 PrintMsgL(player, "SyntaxCommandTPA");
                 return;
@@ -1843,10 +1962,11 @@ namespace Oxide.Plugins
             Timer reqTimer;
             if (!PendingRequests.TryGetValue(player.userID, out reqTimer))
             {
-                PrintMsgL(player, "NoPendingRequest");
+                if (string.IsNullOrEmpty(command) || command != "notpa")
+					PrintMsgL(player, "NoPendingRequest");
                 return;
             }
-            var err = CheckPlayer(player, false, CanCraftTPR(player));
+            var err = CheckPlayer(player, false, CanCraftTPR(player), true);
             if (err != null)
             {
                 PrintMsgL(player, err);
@@ -1882,8 +2002,13 @@ namespace Oxide.Plugins
                 }
             }
             var countdown = GetLower(originPlayer, configData.TPR.VIPCountdowns, configData.TPR.Countdown);
-            PrintMsgL(originPlayer, "Accept", player.displayName, countdown);
-            PrintMsgL(player, "AcceptTarget", originPlayer.displayName);
+
+            if (string.IsNullOrEmpty(command) || command != "notpa")
+			{
+				PrintMsgL(originPlayer, "Accept", player.displayName, countdown);
+				PrintMsgL(player, "AcceptTarget", originPlayer.displayName);
+			}
+
             var timestamp = Facepunch.Math.Epoch.Current;
             TeleportTimers[originPlayer.userID] = new TeleportTimer
             {
@@ -1891,7 +2016,7 @@ namespace Oxide.Plugins
                 TargetPlayer = player,
                 Timer = timer.Once(countdown, () =>
                 {
-                    err = CheckPlayer(originPlayer, configData.TPR.UsableOutOfBuildingBlocked, CanCraftTPR(originPlayer)) ?? CheckPlayer(player, false, CanCraftTPR(player));
+                    err = CheckPlayer(originPlayer, configData.TPR.UsableOutOfBuildingBlocked, CanCraftTPR(originPlayer)) ?? CheckPlayer(player, false, CanCraftTPR(player), true);
                     if (err != null)
                     {
                         PrintMsgL(player, "InterruptedTarget", originPlayer.displayName);
@@ -2150,23 +2275,26 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "TownTPLocation", configData.Town.Location);
                 return;
             }
+
             if (!configData.Settings.TownEnabled)
             {
                 PrintMsgL(player, "TownTPDisabled");
                 return;
             }
+
             if (args.Length == 1 && (args[0].ToLower() != configData.Settings.BypassCMD.ToLower()))
             {
                 PrintMsgL(player, "SyntaxCommandTown");
                 if (IsAllowed(player)) PrintMsgL(player, "SyntaxCommandTownAdmin");
                 return;
             }
+
             if (configData.Town.Location == default(Vector3))
             {
                 PrintMsgL(player, "TownTPNotSet");
                 return;
             }
-            var err = CheckPlayer(player, configData.Town.UsableOutOfBuildingBlocked, CanCraftTown(player));
+            var err = CheckPlayer(player, configData.Town.UsableOutOfBuildingBlocked, CanCraftTown(player), true);
             if (err != null)
             {
                 PrintMsgL(player, err);
@@ -2264,7 +2392,7 @@ namespace Oxide.Plugins
                 OriginPlayer = player,
                 Timer = timer.Once(countdown, () =>
                 {
-                    err = CheckPlayer(player, configData.Town.UsableOutOfBuildingBlocked, CanCraftTown(player));
+                    err = CheckPlayer(player, configData.Town.UsableOutOfBuildingBlocked, CanCraftTown(player), true);
                     if (err != null)
                     {
                         PrintMsgL(player, "Interrupted");
@@ -2574,18 +2702,91 @@ namespace Oxide.Plugins
             return configData.TPR.AllowCraft || permission.UserHasPermission(player.UserIDString, PermCraftTpR);
         }
 
-        private string CheckPlayer(BasePlayer player, bool build = false, bool craft = false)
+        private string NearMonument(BasePlayer player)
+        {
+            var pos = player.transform.position;
+            var poss = pos.ToString();
+
+            foreach(KeyValuePair<string, Vector3> entry in monPos)
+            {
+                var monname = entry.Key;
+                var monvector = entry.Value;
+                float realdistance = monSize[monname].z;
+                monvector.y = pos.y;
+                float dist = Vector3.Distance(pos, monvector);
+
+                if(dist < realdistance)
+                {
+                    return monname;
+                }
+            }
+            return null;
+        }
+
+        private string NearCave(BasePlayer player)
+        {
+            var pos = player.transform.position;
+            var poss = pos.ToString();
+
+            foreach(KeyValuePair<string, Vector3> entry in cavePos)
+            {
+                var cavename = entry.Key;
+                float realdistance = 0f;
+                if(cavename.Contains("Large"))
+                {
+                    realdistance = 75f;
+                }
+                else if(cavename.Contains("Medium"))
+                {
+                    realdistance =  50f;
+                }
+                else
+                {
+                    realdistance = 20f;
+                }
+                var cavevector = entry.Value;
+                cavevector.y = pos.y;
+                var cpos = cavevector.ToString();
+                float dist = Vector3.Distance(pos, cavevector);
+
+                if(dist < realdistance)
+                {
+                    return cavename;
+                }
+            }
+            return null;
+        }
+
+        private string CheckPlayer(BasePlayer player, bool build = false, bool craft = false, bool origin = true)
         {
             var onship = player.GetComponentInParent<CargoShip>();
             var onballoon = player.GetComponentInParent<HotAirBalloon>();
             var inlift = player.GetComponentInParent<Lift>();
             var pos = player.transform.position;
 
+            if(configData.Settings.InterruptTPOnMonument == true)
+            {
+                string monname = NearMonument(player);
+                if(monname != null)
+                {
+                    return _("TooCloseToMon", player, monname);
+                }
+            }
+            if(configData.Home.AllowCave == false)
+            {
+                string monname = NearCave(player);
+                if(monname != null)
+                {
+                    return "TooCloseToCave";
+                }
+            }
+
             if (!player.IsAlive())
                 return "TPDead";
             else if (player.isMounted && configData.Settings.InterruptTPOnMounted == true)
                 return "TPMounted";
-            else if (player.IsWounded() && configData.Settings.InterruptTPOnHurt == true)
+            // Block if hurt if the config is enabled.  If the player is not the target in a tpa condition, allow.
+            else if (player.IsWounded() && origin && configData.Settings.InterruptTPOnHurt == true)
                 return "TPWounded";
             else if (!build && !player.CanBuild())
                 return "TPBuildingBlocked";
@@ -2603,34 +2804,82 @@ namespace Oxide.Plugins
                 return "TPSafeZone";
             else if (!craft && player.inventory.crafting.queue.Count > 0)
                 return "TPCrafting";
-            return null;
+			return null;
         }
 
         private string CheckTargetLocation(BasePlayer player, Vector3 targetLocation, bool build, bool owner)
         {
+            // build == UsableIntoBuildingBlocked
+            // owner == CupOwnerAllowOnBuildingBlocked (applies to block if no cupboard)
             var colliders = Pool.GetList<Collider>();
-            Vis.Colliders(targetLocation, 0.1f, colliders, triggerLayer);
+            Vis.Colliders(targetLocation, 0.1f, colliders, buildingLayer);
             var cups = false;
-            foreach (var collider in colliders)
+            foreach(var collider in colliders)
             {
-                var cup = collider.GetComponentInParent<BuildingPrivlidge>();
-                if (cup == null) continue;
-                cups = true;
-                if (owner && player.userID == cup.OwnerID)
+                var block = collider.GetComponentInParent<BuildingBlock>();
+                if (block == null)
                 {
-                    Pool.FreeList(ref colliders);
-                    return null;
+                    continue;
                 }
-                if (cup.IsAuthed(player))
+                cups = true;
+
+                if(CheckCupboardBlock(block, player, owner))
                 {
-                    Pool.FreeList(ref colliders);
-                    return null;
+                    cups = false;
+                    continue;
+                }
+                if (owner && player.userID == block.OwnerID)
+                {
+                    cups = false;
+                    continue;
                 }
             }
             Pool.FreeList(ref colliders);
+            var builds = build.ToString();
+            var cupss = cups.ToString();
             return cups && !build ? "TPTargetBuildingBlocked" : null;
         }
+        // Check that a building block is owned by/attached to a cupboard, allow tp if not blocked unless allowed by config
+        private bool CheckCupboardBlock(BuildingBlock block, BasePlayer player, bool owner)
+        {
+            // owner == CupOwnerAllowOnBuildingBlocked
+            BuildingManager.Building building = block.GetBuilding();
+            if(building != null)
+            {
+                // cupboard overlap.  Check privs.
+                if(building.buildingPrivileges == null)
+                {
+                    return false;
+                }
 
+                ulong hitEntityOwnerID = block.OwnerID != 0 ? block.OwnerID : 0;
+                if (owner && player.userID == hitEntityOwnerID)
+                {
+                    return true;
+                }
+
+                foreach(var privs in building.buildingPrivileges)
+                {
+                    if(CupboardAuthCheck(privs, hitEntityOwnerID))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private bool CupboardAuthCheck(BuildingPrivlidge priv, ulong hitEntityOwnerID)
+        {
+            foreach(var auth in priv.authorizedPlayers.Select(x => x.userid).ToArray())
+            {
+                if(auth == hitEntityOwnerID)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
         private string CheckInsideBlock(Vector3 targetLocation)
         {
             List<BuildingBlock> blocks = Pool.GetList<BuildingBlock>();
@@ -2788,8 +3037,17 @@ namespace Oxide.Plugins
 
         private bool UnderneathFoundation(Vector3 position)
         {
-            RaycastHit hit;
-            if (Physics.Raycast(new Ray(position, Vector3.up), out hit, 10, buildingLayer))
+            // Check for foundation half-height above where home was set
+            foreach(var hit in Physics.RaycastAll(position, up, 2f, buildingLayer))
+            {
+                if (hit.GetCollider().name.Contains("foundation"))
+                {
+                    return true;
+                }
+            }
+            // Check for foundation full-height above where home was set
+            // Since you can't see from inside via ray, start above.
+            foreach(var hit in Physics.RaycastAll(position + up + up + up + up, down, 2f, buildingLayer))
             {
                 if (hit.GetCollider().name.Contains("foundation"))
                 {
