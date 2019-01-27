@@ -45,8 +45,7 @@
     },
     "small.oil.refinery": {
       "charcoal": 1.0,
-      "lowgradefuel": 1.0,
-      "metal.refined": 1.0
+      "lowgradefuel": 1.0
     },
     "furnace.large": {
       "charcoal": 1.0,
@@ -145,6 +144,7 @@
       "wood"
     ],
     "small.oil.refinery": [
+      "crude.oil",
       "lowgradefuel",
       "wood"
     ],
