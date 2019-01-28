@@ -8,7 +8,8 @@
     "fireplace.stone": 1.0,
     "furnace": 5000.0,
     "furnace.large": 5000.0,
-    "refinery_small_deployed": 5000.0
+    "refinery_small_deployed": 5000.0,
+    "hobobarrel_static": 5000.0
   },
   "Fuel Usage Speed Multipliers": {
     "bbq.deployed": 1.0,
@@ -17,7 +18,8 @@
     "fireplace.stone": 1.0,
     "furnace": 1.0,
     "furnace.large": 1.0,
-    "refinery_small_deployed": 1.0
+    "refinery_small_deployed": 1.0,
+    "hobobarrel_static": 1.0
   },
   "Fuel Usage Multipliers": {
     "bbq.deployed": 1,
@@ -26,7 +28,8 @@
     "fireplace.stone": 1,
     "furnace": 1,
     "furnace.large": 1,
-    "refinery_small_deployed": 1
+    "refinery_small_deployed": 1,
+    "hobobarrel_static": 1
   },
   "Output Multipliers": {
     "furnace": {
@@ -62,6 +65,18 @@
       "wolfmeat.cooked": 1.0,
       "meat.pork.cooked": 1.0,
       "lowgradefuel": 1.0
+    },
+    "hobobarrel_static": {
+      "charcoal": 1.0,
+      "metal.fragments": 1.0,
+      "horsemeat.cooked": 1.0,
+      "deermeat.cooked": 1.0,
+      "chicken.cooked": 1.0,
+      "humanmeat.cooked": 1.0,
+      "fish.cooked": 1.0,
+      "bearmeat.cooked": 1.0,
+      "wolfmeat.cooked": 1.0,
+      "meat.pork.cooked": 1.0
     },
     "campfire": {
       "charcoal": 1.0,
@@ -152,6 +167,20 @@
       "lowgradefuel",
       "wood"
     ],
+    "hobobarrel_static": [
+      "bearmeat.raw",
+      "can.beans",
+      "can.tuna",
+      "chicken.raw",
+      "deermeat.raw",
+      "fish.raw",
+      "horsemeat.raw",
+      "humanmeat.raw",
+      "meat.boar",
+      "wolfmeat.raw",
+      "wood",
+      "crude.oil"
+    ],
     "campfire": [
       "bearmeat.raw",
       "can.beans",
@@ -163,7 +192,8 @@
       "humanmeat.raw",
       "meat.boar",
       "wolfmeat.raw",
-      "wood"
+      "wood",
+      "crude.oil"
     ],
     "cursedcauldron": [
       "bearmeat.raw",
@@ -176,7 +206,8 @@
       "humanmeat.raw",
       "meat.boar",
       "wolfmeat.raw",
-      "wood"
+      "wood",
+      "crude.oil"
     ],
     "bbq.deployed": [
       "bearmeat.raw",
@@ -189,7 +220,8 @@
       "humanmeat.raw",
       "meat.boar",
       "wolfmeat.raw",
-      "wood"
+      "wood",
+      "crude.oil"
     ],
     "fireplace.stone": [
       "bearmeat.raw",
@@ -202,7 +234,8 @@
       "humanmeat.raw",
       "meat.boar",
       "wolfmeat.raw",
-      "wood"
+      "wood",
+      "crude.oil"
     ]
   },
   "Blacklist": {
@@ -217,6 +250,16 @@
       "wolfmeat.cooked"
     ],
     "furnace.large": [
+      "bearmeat.cooked",
+      "chicken.cooked",
+      "deermeat.cooked",
+      "fish.cooked",
+      "horsemeat.cooked",
+      "humanmeat.cooked",
+      "meat.pork.cooked",
+      "wolfmeat.cooked"
+    ],
+    "hobobarrel_static": [
       "bearmeat.cooked",
       "chicken.cooked",
       "deermeat.cooked",
@@ -275,7 +318,8 @@
     "fireplace.stone": 1,
     "furnace": 1,
     "furnace.large": 1,
-    "refinery_small_deployed": 1
+    "refinery_small_deployed": 1,
+    "hobobarrel_static": 1
   },
   "Debug": false
 }
