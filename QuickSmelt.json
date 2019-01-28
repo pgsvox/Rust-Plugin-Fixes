@@ -2,31 +2,31 @@
   "Permission": "quicksmelt.use",
   "Use Permission": false,
   "Speed Multipliers": {
-    "bbq": 5.0,
-    "cursedcauldron": 5.0,
-    "campfire": 5.0,
-    "fireplace.stone": 5.0,
-    "furnace": 5.0,
-    "furnace.large": 5.0,
-    "small.oil.refinery": 5.0
+    "bbq.deployed": 5000.0,
+    "cursedcauldron": 5000.0,
+    "campfire": 1.0,
+    "fireplace.stone": 1.0,
+    "furnace": 5000.0,
+    "furnace.large": 5000.0,
+    "refinery_small_deployed": 5000.0
   },
   "Fuel Usage Speed Multipliers": {
-    "bbq": 1.0,
+    "bbq.deployed": 1.0,
     "cursedcauldron": 1.0,
     "campfire": 1.0,
     "fireplace.stone": 1.0,
     "furnace": 1.0,
     "furnace.large": 1.0,
-    "small.oil.refinery": 1.0
+    "refinery_small_deployed": 1.0
   },
   "Fuel Usage Multipliers": {
-    "bbq": 1,
+    "bbq.deployed": 1,
     "campfire": 1,
     "cursedcauldron": 1,
     "fireplace.stone": 1,
     "furnace": 1,
     "furnace.large": 1,
-    "small.oil.refinery": 1
+    "refinery_small_deployed": 1
   },
   "Output Multipliers": {
     "furnace": {
@@ -41,9 +41,10 @@
       "fish.cooked": 1.0,
       "bearmeat.cooked": 1.0,
       "wolfmeat.cooked": 1.0,
-      "meat.pork.cooked": 1.0
+      "meat.pork.cooked": 1.0,
+      "lowgradefuel": 1.0
     },
-    "small.oil.refinery": {
+    "refinery_small_deployed": {
       "charcoal": 1.0,
       "lowgradefuel": 1.0
     },
@@ -59,7 +60,8 @@
       "fish.cooked": 1.0,
       "bearmeat.cooked": 1.0,
       "wolfmeat.cooked": 1.0,
-      "meat.pork.cooked": 1.0
+      "meat.pork.cooked": 1.0,
+      "lowgradefuel": 1.0
     },
     "campfire": {
       "charcoal": 1.0,
@@ -97,7 +99,7 @@
       "wolfmeat.cooked": 1.0,
       "meat.pork.cooked": 1.0
     },
-    "bbq": {
+    "bbq.deployed": {
       "charcoal": 1.0,
       "metal.fragments": 1.0,
       "horsemeat.cooked": 1.0,
@@ -125,7 +127,8 @@
       "metal.ore",
       "sulfur.ore",
       "wolfmeat.raw",
-      "wood"
+      "wood",
+      "crude.oil"
     ],
     "furnace.large": [
       "bearmeat.raw",
@@ -141,9 +144,10 @@
       "metal.ore",
       "sulfur.ore",
       "wolfmeat.raw",
-      "wood"
+      "wood",
+      "crude.oil"
     ],
-    "small.oil.refinery": [
+    "refinery_small_deployed": [
       "crude.oil",
       "lowgradefuel",
       "wood"
@@ -174,7 +178,7 @@
       "wolfmeat.raw",
       "wood"
     ],
-    "bbq": [
+    "bbq.deployed": [
       "bearmeat.raw",
       "can.beans",
       "can.tuna",
@@ -252,7 +256,7 @@
       "meat.pork.cooked",
       "wolfmeat.cooked"
     ],
-    "bbq": [
+    "bbq.deployed": [
       "bearmeat.cooked",
       "chicken.cooked",
       "deermeat.cooked",
@@ -265,13 +269,13 @@
   },
   "Smelting Frequencies (Smelt items every N smelting ticks)": {
     "global": 1,
-    "bbq": 1,
+    "bbq.deployed": 1,
     "cursedcauldron": 1,
     "campfire": 1,
     "fireplace.stone": 1,
     "furnace": 1,
     "furnace.large": 1,
-    "small.oil.refinery": 1
+    "refinery_small_deployed": 1
   },
   "Debug": false
 }
