@@ -129,7 +129,7 @@
   },
   "Whitelist": {
     "furnace": [
-      "bearmeat.raw",
+      "bearmeat",
       "can.beans",
       "can.tuna",
       "chicken.raw",
@@ -146,7 +146,7 @@
       "crude.oil"
     ],
     "furnace.large": [
-      "bearmeat.raw",
+      "bearmeat",
       "can.beans",
       "can.tuna",
       "chicken.raw",
@@ -168,7 +168,7 @@
       "wood"
     ],
     "hobobarrel_static": [
-      "bearmeat.raw",
+      "bearmeat",
       "can.beans",
       "can.tuna",
       "chicken.raw",
@@ -182,7 +182,7 @@
       "crude.oil"
     ],
     "campfire": [
-      "bearmeat.raw",
+      "bearmeat",
       "can.beans",
       "can.tuna",
       "chicken.raw",
@@ -196,7 +196,7 @@
       "crude.oil"
     ],
     "cursedcauldron": [
-      "bearmeat.raw",
+      "bearmeat",
       "can.beans",
       "can.tuna",
       "chicken.raw",
@@ -210,7 +210,7 @@
       "crude.oil"
     ],
     "bbq.deployed": [
-      "bearmeat.raw",
+      "bearmeat",
       "can.beans",
       "can.tuna",
       "chicken.raw",
@@ -224,7 +224,7 @@
       "crude.oil"
     ],
     "fireplace.stone": [
-      "bearmeat.raw",
+      "bearmeat",
       "can.beans",
       "can.tuna",
       "chicken.raw",
