@@ -143,7 +143,8 @@
       "sulfur.ore",
       "wolfmeat.raw",
       "wood",
-      "crude.oil"
+      "crude.oil",
+      "charcoal"
     ],
     "furnace.large": [
       "bearmeat",
@@ -160,12 +161,14 @@
       "sulfur.ore",
       "wolfmeat.raw",
       "wood",
-      "crude.oil"
+      "crude.oil",
+      "charcoal"
     ],
     "refinery_small_deployed": [
       "crude.oil",
       "lowgradefuel",
-      "wood"
+      "wood",
+      "charcoal"
     ],
     "hobobarrel_static": [
       "bearmeat",
@@ -179,7 +182,8 @@
       "meat.boar",
       "wolfmeat.raw",
       "wood",
-      "crude.oil"
+      "crude.oil",
+      "charcoal"
     ],
     "campfire": [
       "bearmeat",
@@ -193,7 +197,8 @@
       "meat.boar",
       "wolfmeat.raw",
       "wood",
-      "crude.oil"
+      "crude.oil",
+      "charcoal"
     ],
     "cursedcauldron": [
       "bearmeat",
@@ -207,7 +212,8 @@
       "meat.boar",
       "wolfmeat.raw",
       "wood",
-      "crude.oil"
+      "crude.oil",
+      "charcoal"
     ],
     "bbq.deployed": [
       "bearmeat",
@@ -221,7 +227,8 @@
       "meat.boar",
       "wolfmeat.raw",
       "wood",
-      "crude.oil"
+      "crude.oil",
+      "charcoal"
     ],
     "fireplace.stone": [
       "bearmeat",
@@ -235,7 +242,8 @@
       "meat.boar",
       "wolfmeat.raw",
       "wood",
-      "crude.oil"
+      "crude.oil",
+      "charcoal"
     ]
   },
   "Blacklist": {
