@@ -1,0 +1,434 @@
+{
+  "settings": {
+    "Tabs": [
+      {
+        "ButtonText": "<color=cyan>Information</color>",
+        "HeaderText": "<color=cyan>General Information</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "Type /info to see these pages again.",
+              "<color=red>Decay is turned on!</color>",
+              "<color=red>  Your structures will decay unless you have a tool cupboard with resources inside.</color>",
+              "<color=orange>Shooting, looting or griefing other players, their bases, kills or airdrop is not allowed.</color> ",
+              "<color=orange>Using exploits, cheats or hacking will get you banned,</color>",
+              "<color=orange> as determined at the Admins discretion.</color>",
+              "<color=orange>Impolite behaviour towards the Admins or players can get you banned.</color>",
+              "We have armed and dangerous Paratrooper bots at the Airfield,",
+              "and Peace Keeper Murderers at the Mining Outposts.",
+              "Peace Keepers only attack if you have a weapon out/active",
+              " (including hatchets and picks).  They are immuned to melee damage.",
+              "Radiation is slightly reduced and goes up and down, watch for chat messages.",
+              "To bind backpack: Open console (<color=cyan>F1</color>), type in (<color=cyan>bind b backpack.open</color>)",
+              "To have this saved for your next Rust adventure, type<color=cyan>writecfg</color> into console.",
+              "Server reboots daily early in the morning and will warning you in advance.",
+              "Discord server: <color=cyan>https://discord.gg/JjW3TVb</color>",
+              "Thank you for visiting, we hope you have a lot of fun!"
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "You will find no traps on this server,",
+              " and some clever person somehow gets one it will not harm you.",
+              "Our goal is to have very PVE environment with none of the PVP trappings.",
+              "We want people to feel as safe as we can make it.",
+              "We do not want to trigger the saltiness that PVP evokes.",
+              "That is also why there are restriction on high walls and TC placements.",
+              "We don't want fortresses of Doom. (check the rules for details)",
+              "This is not a good place to practice PVP as the tools are blocked, missing or restricted."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "We are running <color=cyan>LightsOn</color> with lights always on.",
+              "We did this instead of only at night to be friendly to cave bases.",
+              "If you place a light it will automatically be on and not use fuel.",
+              "Hats do not use fuel.",
+              "Hat and some lights need one fuel in them to function.",
+              "Simple Lights are not automatic to allow you to play with electricity.",
+              "If you turn a light off it will eventually turn back on.",
+              "You can toggle lanterns and candle lamps with no fuel.",
+              "Toggling off and on a furnance, fireplace, bbq,",
+              "   oil refinery, camp file, cauldron, or hobo barrel will use fuel!",
+              "We did that to allow you to use them to process/cook with.",
+              "Note you can cook oil in furnace.  Cooking in a furnace, bbq and cauldron is at <color=silver>massive</color> speed.",
+              "We use a splitter to automatically add fuel,",
+              "  we add a tiny bit more fuel in the splitter to processing always completes.",
+              "Hobo barrels are automatically light to add mood."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "",
+              ""
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      },
+      {
+        "ButtonText": "<color=cyan>Rules</color>",
+        "HeaderText": "<color=cyan>Rules</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "The following activities are prohibited in the Game:",
+              "    1. Harassing, griefing, shooting, manipulating or otherwise being obnoxious to other players.",
+              "    2. Flooding, flaming, spam, printing in capital letters (CAPS LOCK).",
+              "    3. Use of bots, third-party software, glitches, exploits and/or bugs.",
+              "    4. Fraud, other dishonest actions, including pretending to be staff.",
+              "    5. Advertisement, political propaganda; especially advertising other servers.",
+              "Please read the full rules on the following pages, they will apply even if you do not read them.",
+              "Breaking the rules will likely result in you being kicked and/or banned.",
+              "If you have questions ask, do not assume."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "First one to start the timer of the locked crate gets the contents.",
+              "First one to start looting a crate gets the contents. No Ninja looting.",
+              "No looting a barrel broken by someone else if they are there.",
+              "Abandoned loot on the ground is fair game.",
+              "If you sleep in town please go to sleep on a bed.",
+              "Although we have sleeper protection please build a base to sleep in."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "Lock your doors, boxes and Tool Cupboard.  Secure your windows and roof.",
+              "If it can have a lock on it, put a lock on it.  Play smart and safe.",
+              "This will protect you better than the plugins try to protect you.",
+              "We run an array of protections plugins, but they are not foolproof, do not rely on them.",
+              "No Building on ROADWAY.  Base will be levelled with no warning.",
+              "Please no twig building the heli will shoot through that. <color=cyan>/up 1</color> them to wood please.",
+              "TWIG decays at double rate.",
+              "All buildings decay so stock your Tool Cupboard or wake up mid air!"
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "This is a family friendly server.  Apply the grandma and grand daughter rule.",
+              "If it would not be appropriate to say in front of them or show to them, you must keep it off the server.",
+              "I have a diverse vocabulary and will occasional slip.",
+              "If you speak inappropriately you will be warned and ask to discontinue.",
+              "If you are obvious trolling or doing harassment you will be kicked and banned with no notice.",
+              "Please refrain from discussions of politics, religion, sexual matters and race in general chat.",
+              "These discussions always seem to end badly."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "Intolerance or hate speech based on creed, race, sexuality, or anything else is not allowed.",
+              "I have a diverse set of friends, and you all equally deserve a fair go,",
+              "and a place away from the ignorance you can face in real life.",
+              "If someone is harassing you:",
+              "     please send a copy of the chat in a discord message to mal.speedie#2641",
+              "     please let me know how you are being harrassed and their specific name(s)."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "Harassing, griefing, manipulating or otherwise being obnoxious to other players is not tolerated.",
+              "If there are issues, escalate to the admin and it will be resolved as quickly as I can.",
+              "If not invited, stay out of people’s property even if it is left unlocked.",
+              "Do not take from another players corpse, chest, box, furnace, refinery, or other storage.",
+              "Do not raid, troll, grief and/or loot other players their unfinished bases, mining equipment,",
+              "    private supply signal drops and Heli/Tank crates."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "No shooting other players without mutual consent in advance.",
+              "We have the duel plugin if you want to kill each other.",
+              "Accidents may happen.  If you dress like an NPC more likely so.",
+              "If there is a pattern of player shooting, or blatant player shooting you will be banned.",
+              "We want to be nice to each other and focus on killing the bots.",
+              "Bots are at air field and the murderers at the mining outpost.",
+              "Note those murders are on peace keeper so if you have no weapon out, they will leave you alone."
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "You are allowed five bases.  Tool cupboards must be in your base.",
+              "You are not allowed to reserve land with tool cupboards, these will be removed with no refund.",
+              "You are not allowed to sustain high walls with a tc room beside them.  TC in main bases only.",
+              "No blocking off islands, monuments, town, other players bases.",
+              "High walls can only be close to your base to make courtyards",
+              "You can not place TCs to keep high walls from decaying.",
+              "  and not used to claim land or restrict areas.",
+              "Basically make a happy home, not the fortress of Doom."
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      },
+      {
+        "ButtonText": "<color=cyan>Commands</color>",
+        "HeaderText": "<color=cyan>Commands</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "<color=red>•</color><color=cyan>   /bgrade</color> <color=lime> (1-4) for upgrades at the cost of materials.</color>",
+              "<color=red>•</color><color=cyan>   /sil URL</color> <color=lime>To paste images to signs.</color>",
+              "<color=red>•</color><color=cyan>   /silt </color><color=silver>TEXT</color> <color=lime>To paste text to signs.</color>",
+              "<color=red>•</color><color=cyan>   /town</color> <color=lime>To go to town.</color>",
+              "<color=red>•</color><color=cyan>   /home</color> <color=lime>To set your home location on a foundation.</color>",
+              "<color=red>•</color><color=cyan>   /kit</color> <color=lime> to open the kit selection screen.</color>",
+              "<color=red>•</color><color=cyan>   /friend</color> <color=lime> add (name) to add your friends. </color><color=red>Warning friends can access your stuff!</color>",
+              "<color=red>•</color><color=cyan>   /friends</color> <color=lime> is a GUI to maintain friends.</color>",
+              "<color=red>•</color><color=cyan>   /rewards</color> <color=lime>to check your Rewards Balance.</color>",
+              "<color=red>•</color><color=cyan>   /tpr </color><color=silver>PLAYER</color> <color=lime> to request a teleport to that player. i.e.: /tpr mals.</color>",
+              "<color=red>•</color><color=cyan>   /tpa</color> <color=lime>to accept a teleport request.</color>",
+              "<color=red>•</color><color=cyan>   /grt</color> <color=lime>to use Grid Teleport using map coordinates.</color>"
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "<color=red>•</color><color=cyan>   /crosshair</color> <color=lime>to open crosshair selection screen.</color>",
+              "<color=red>•</color><color=cyan>   /codelock</color> <color=lime>to use automatic code locks on your boxes, doors.</color>",
+              "<color=red>•</color><color=cyan>   /warp</color> <color=lime>to get a list of public places you can teleport to.</color>",
+              "<color=red>•</color><color=cyan>   /clan</color> <color=lime> to see the clan commands.</color>",
+              "<color=red>•</color><color=cyan>   /outpost</color> <color=lime>to teleport to the outpost.</color>",
+              "<color=red>•</color><color=cyan>   /where</color> <color=lime>to get information where your corpse is.  It will be marked on the map too! </color>",
+              "<color=red>•</color><color=cyan>   /duel</color> <color=lime>to see the commands for entering the PVP duelling arena.</color>",
+              "<color=red>•</color><color=cyan>   /flare</color> <color=lime>to spawn a flare gun. It requires flares to operate.</color>",
+              "<color=red>•</color><color=cyan>   /grenade</color> <color=lime>to spawn a grenade launcher.  It requires f1 grenades to operate.</color>",
+              "<color=red>•</color><color=cyan>   /friend</color> <color=lime>to see a list of commands to be friends with someone.</color>",
+              "<color=lime>   Note friend gives them share access to your boxes etc., </color><color=red>Only use with trust worthy players!</color>"
+            ],
+            "ImageSettings": []
+          },
+          {
+            "TextLines": [
+              "<color=red>•</color><color=cyan>   /rrm</color> <color=lime>to control what reward message you want to see (and not see). </color>",
+              "<color=red>•</color><color=cyan>   /mytime</color> <color=lime>allows you to change the time of day.</color>",
+              "<color=red>•</color><color=cyan>   /myweather</color> <color=lime>allows you to change the weather,</color>",
+              "<color=red>•</color><color=cyan>   /remove</color> <color=lime>allows you to remove objects in your base with a refund for some objects.</color>",
+              "<color=red>•</color><color=cyan>   /pm </color><color=silver>PLAYER</color><color=lime> and</color><color=cyan> /r</color> <color=lime>to send private message to a player and to reply to a private message. </color>",
+              "<color=red>•</color><color=cyan>   /rec</color> <color=lime>to access a portable recycler on the go!</color>",
+              "<color=red>•</color><color=cyan>   /skinbox</color> <color=lime>opens a box that allows you to change the appearance of many items.</color>",
+              "<color=red>•</color><color=cyan>   /ad </color><color=silver>NUMBER</color> <color=lime>to set a door to close after NUMBER seconds  </color>",
+              "<color=red>•</color><color=cyan>   /sdoor</color> <color=lime>to make a door a sliding door like star trek.</color>",
+              "<color=lime> use /sad NUMBER for sliding door auto closer.</color>"
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      },
+      {
+        "ButtonText": "<color=cyan>Events and Notable Plugins</color>",
+        "HeaderText": "<color=cyan>Events and Notable Plugins</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "<color=silver>NoWeaponDrop:</color><color=lime>When you die you do not drop your weapon.  That gets old fast.</color>",
+              "<color=silver>Pigrells:</color><color=lime>Bearalls modified for a full set of random animals at 5 percent chance per barrel.</color>",
+              "<color=silver>Duel:</color><color=lime> The only way you can PVP on the server in a small outdoor arena.</color>",
+              "<color=silver>Kill Streaks:</color><color=lime> Kill stuff get bonus stuff (nothing bad).</color>",
+              "<color=silver>DeepWater:</color><color=lime> Oil rig event, out to sea, with decent loot and explosions.</color>",
+              "<color=silver>Dangerous Treasure:</color><color=lime> Kill boss and minions to claim the loot box.</color>",
+              "<color=silver>Inferno:</color><color=lime> Kill the boss and minions while dodging fire balls to claim the loot box.</color>",
+              "<color=silver>Treasure Chest:</color><color=lime> Kill the Guards and steal their treasure.</color>",
+              "<color=silver>Rain of Fire:</color><color=lime> Dodge the fireballs falling from the sky and collect meteors.</color>",
+              "<color=silver>Pilot Eject:</color><color=lime> Watch the Heli, it may crash soon, but watch out for the pilot and co-pilot.</color>",
+              "<color=silver>Plane Crash:</color><color=lime> Grab some smoke rockets and shoot the plane down.</color>",
+              "<color=silver>Lock-on Rockets:</color><color=lime> Use these to shoot the cargo plane and chinook!</color>",
+              "<color=silver>Fishing:</color><color=lime> need to relax, try some fishing for a change of pace.</color>"
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      },
+      {
+        "ButtonText": "<color=cyan>ZLevels Information</color>",
+        "HeaderText": "<color=cyan>ZLevels Information</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "<color=lime>We are running ZLevelsRemastered</color>",
+              "<color=lime>The plugin includes 4 skills to level up:</color>",
+              "",
+              "",
+              "<color=orange> Mining</color> - <color=lime>Gathering all types or ore</color>",
+              "<color=orange> Woodcutting</color> - <color=lime>Gathering wood, cactus</color>",
+              "<color=orange> Skinning</color> - <color=lime>Gathering animal</color>",
+              "<color=orange> Aquire</color> - <color=lime>Collecting</color>",
+              "<color=lime>We skipped the crafting component to avoid crafting spam.</color>",
+              "<color=lime>All levels are capped at 100.  Rate is lower than stock, but number of levels is higher.</color>"
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      },
+      {
+        "ButtonText": "<color=cyan>Leaderboard</color>",
+        "HeaderText": "<color=cyan>Leaderboard</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "<color=orange>Commands to view PlayerRanks:</color>",
+              "<color=cyan>/pr 'category name'</color> <color=lime>Displays server top 5 for that category to the user.</color>",
+              "<color=cyan>/pr tops</color> <color=lime>Displays a player's top stats for each category, in a private list.</color>",
+              "",
+              "<color=orange>Commands to view Player Challenges:</color>",
+              "<color=cyan>/pc</color> <color=lime>Opens the leader board which will display the top 25 users from each category.</color>",
+              "",
+              "<color=lime>Note that </color><color=cyan>/duel</color> <color=lime>has a leader board too.</color>"
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      },
+      {
+        "ButtonText": "<color=cyan>Teleport Information</color>",
+        "HeaderText": "<color=cyan>Teleport Information</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "<color=cyan>/town</color> <color=lime>teleports you to town. </color>",
+              "<color=cyan>/tpr </color>PLAYER <color=lime>to request a teleport.  This require the other player go /tpa.</color>",
+              "<color=cyan>/tpt </color>PLAYER <color=lime>teleports you to a team or clan member. (no /tpa needed)</color>",
+              "<color=cyan>/tpa </color>PLAYER <color=lime>to accept a request to teleport to you.</color>",
+              "<color=cyan>/sethome </color>NAME <color=lime>to set a home at your base.</color>",
+              "<color=cyan>/home </color>NAME <color=lime>teleports you to your home.</color>",
+              "<color=cyan>/home list </color><color=lime>lists all the home you have saved.</color>",
+              "<color=cyan>/home remove </color>NAME <color=lime>Removes that home from your list.</color>",
+              "",
+              "<color=orange>Commands to view TP Information:</color>",
+              "<color=cyan>/tpinfo Home</color> <color=lime> Displays Information related to Your Home TP.</color>",
+              "<color=cyan>/tpinfo TPR</color> <color=lime>  Displays Information related to Your Request for TP.</color>",
+              "<color=cyan>/tpinfo town</color> <color=lime>Displays Information related to Your town TP.</color>",
+              "",
+              "<color=cyan>/warp</color> <color=lime>Displays a list of warp location to teleport to.  Click to teleport.</color>",
+              "<color=cyan>/warp</color> <color=lime>Displays a list of warp location to teleport to.  Click to teleport.</color>",
+              "<color=cyan>/otp or /outpost</color><color=lime> will teleport you to the outpost.  Do not have a weapon or tool out!</color>",
+              "<color=cyan>/btp</color><color=lime> will teleport you to the bandit camp.  Do not have a weapon or tool out!</color>",
+              "<color=cyan>/grt</color> GRID<color=lime> will teleport you to a grid location.</color>",
+              "<color=lime>  For example /grt A15 will take you to the top left of the A15 grid.</color>"
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      },
+      {
+        "ButtonText": "<color=red>Wipe Schedule</color>",
+        "HeaderText": "<color=cyan>Old Souls PVE</color>",
+        "Pages": [
+          {
+            "TextLines": [
+              "<color=lime>Next Scheduled Wipe: February 7th, 2019.</color>",
+              "<color=lime>There is a</color> <color=red>FORCED WIPE</color> <color=lime>done by FacePunch on the first Thursday night of the month.</color>"
+            ],
+            "ImageSettings": []
+          }
+        ],
+        "TabButtonAnchor": 4,
+        "TabButtonFontSize": 16,
+        "HeaderAnchor": 0,
+        "HeaderFontSize": 32,
+        "TextFontSize": 16,
+        "TextAnchor": 3,
+        "OxideGroup": "default"
+      }
+    ],
+    "ShowInfoOnPlayerInit": false,
+    "ShowInfoOnlyOncePerRuntime": true,
+    "TabToOpenByDefault": 0,
+    "Position": {
+      "MinX": 0.15,
+      "MaxX": 0.9,
+      "MinY": 0.2,
+      "MaxY": 0.9
+    },
+    "BackgroundImage": {
+      "Enabled": true,
+      "Position": {
+        "MinX": 0.0,
+        "MaxX": 1.1,
+        "MinY": 0.0,
+        "MaxY": 1.1
+      },
+      "Url": "https://i.imgur.com/cZ6lEU2.png",
+      "TransparencyInPercent": 50
+    },
+    "ActiveButtonColor": "#0255255255",
+    "InactiveButtonColor": "#127127127255",
+    "CloseButtonColor": "#127127127255",
+    "NextPageButtonColor": "#127127127255",
+    "PrevPageButtonColor": "#127127127255",
+    "BackgroundColor": "#00000000",
+    "HelpButton": {
+      "IsEnabled": false,
+      "Text": "Help",
+      "Position": {
+        "MinX": 0.0,
+        "MaxX": 0.05,
+        "MinY": 0.05,
+        "MaxY": 0.14
+      },
+      "Color": "#127127127255",
+      "FontSize": 18
+    },
+    "UpgradedConfig": true
+  }
+}
