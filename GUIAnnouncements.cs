@@ -1847,13 +1847,13 @@ namespace Oxide.Plugins
                 if (helicopterDestroyedAnnouncementWithDestroyer && !string.IsNullOrEmpty(heliLastHitPlayer))
                 {
                     CreateAnnouncement(helicopterDestroyedAnnouncementWithDestroyerText.Replace("{playername}", heliLastHitPlayer), helicopterDestroyedAnnouncementBannerColor, helicopterDestroyedAnnouncementTextColor);
-                    heliLastHitPlayer = String.Empty;
+                    
                 }
                 else
                 {
                     CreateAnnouncement(helicopterDestroyedAnnouncementText, helicopterDestroyedAnnouncementBannerColor, helicopterDestroyedAnnouncementTextColor);
-					heliLastHitPlayer = String.Empty;
                 }
+				heliLastHitPlayer = String.Empty;
 			}
             if (bradleyDestroyedAnnouncement && entity is BradleyAPC)
             {
@@ -1863,13 +1863,12 @@ namespace Oxide.Plugins
                 if (bradleyDestroyedAnnouncementWithDestroyer && !string.IsNullOrEmpty(bradleyLastHitPlayer))
                 {
                     CreateAnnouncement(bradleyDestroyedAnnouncementWithDestroyerText.Replace("{playername}", bradleyLastHitPlayer), bradleyDestroyedAnnouncementBannerColor, bradleyDestroyedAnnouncementTextColor);
-                    bradleyLastHitPlayer = String.Empty;
                 }
                 else
                 {
                     CreateAnnouncement(bradleyDestroyedAnnouncementText, bradleyDestroyedAnnouncementBannerColor, bradleyDestroyedAnnouncementTextColor);
-					bradleyLastHitPlayer = String.Empty;
                 }
+				bradleyLastHitPlayer = String.Empty;
 
             }
 
@@ -1881,14 +1880,14 @@ namespace Oxide.Plugins
                 if (chinookDestroyedAnnouncementWithDestroyer && string.IsNullOrEmpty(chinookLastHitPlayer))
                 {
                     CreateAnnouncement(chinookDestroyedAnnouncementWithDestroyerText.Replace("{playername}", chinookLastHitPlayer), chinookDestroyedAnnouncementBannerColor, chinookDestroyedAnnouncementTextColor);
-                    chinookLastHitPlayer = String.Empty;
                 }
                 else
                 {
                     CreateAnnouncement(chinookDestroyedAnnouncementText, chinookDestroyedAnnouncementBannerColor, chinookDestroyedAnnouncementTextColor);
-					chinookLastHitPlayer = String.Empty;
+
                 }
-            }
+				chinookLastHitPlayer = String.Empty;
+			}
 
             if (entity is BasePlayer)
             {
@@ -1912,6 +1911,7 @@ namespace Oxide.Plugins
                     else if (helicopterDespawnAnnouncement)
                         CreateAnnouncement(helicopterDespawnAnnouncementText, helicopterDespawnAnnouncementBannerColor, helicopterDespawnAnnouncementTextColor);
                 });
+				heliLastHitPlayer = String.Empty;
             }
             if (entity is CH47HelicopterAIController)
             {
@@ -1923,6 +1923,7 @@ namespace Oxide.Plugins
                     else if (chinookDespawnAnnouncement)
                         CreateAnnouncement(chinookDespawnAnnouncementText, chinookDespawnAnnouncementBannerColor, chinookDespawnAnnouncementTextColor);
                 });
+				chinookLastHitPlayer = String.Empty;
             }
             if (entity is BradleyAPC)
             {
@@ -1934,6 +1935,7 @@ namespace Oxide.Plugins
                     else if (bradleyDespawnAnnouncement)
                         CreateAnnouncement(bradleyDespawnAnnouncementText, bradleyDespawnAnnouncementBannerColor, bradleyDespawnAnnouncementTextColor);
                 });
+				bradleyLastHitPlayer = String.Empty;
             }
             if (entity is CargoShip)
             {
