@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-[Info("Rust Rewards", "MSpeedie", "2.2.2")]
+[Info("Rust Rewards", "MSpeedie", "2.2.3")]
 [Description("Rewards players for activities using Economic or ServerRewards")]
 // Big Thank you to Tarek the original author of this plugin!
 // redBDGR, for maintaining the Barrel Points plugin
@@ -1093,48 +1093,52 @@ public class RustRewards : RustPlugin
 
 	private void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
 	{
-
-		if (!KillReward_Enabled) return;
-		if (victim == null || string.IsNullOrEmpty(victim.name)) return;
-		//Puts("oed victim.name: " + victim.name);
-		if ((info != null && info?.Initiator != null) &&
-			(info.Initiator is BaseNpc || info.Initiator is NPCPlayerApex ||
-			info.Initiator is NPCPlayer || info.Initiator is NPCMurderer ||
-			(!string.IsNullOrEmpty(info.Initiator.name) && (info.Initiator.name.Contains("scarecrow.prefab") ||
-			info.Initiator.name.Contains("/npc/scientist/htn"))))) return;
-		if ((victim.name.Contains("servergibs") || victim.name.Contains("corpse")) || victim.name.Contains("assets/prefabs/plants/")) return;  // no money for cleaning up the left over crash/corpse/plants
-
 		BasePlayer bplayer = null;
 		IPlayer    iplayer = null;
 
-		if (info != null && info.Initiator != null && info.Initiator is BasePlayer)
+		if (!KillReward_Enabled) return;
+		if (victim == null || string.IsNullOrEmpty(victim.name)) return;
+		if ((victim.name.Contains("servergibs") || victim.name.Contains("corpse")) || victim.name.Contains("assets/prefabs/plants/")) return;  // no money for cleaning up the left over crash/corpse/plants
+		//Puts("oed victim.name: " + victim.name);
+		if (info != null && info.Initiator != null && !string.IsNullOrEmpty(info.Initiator.name))
 		{
-			bplayer = info?.Initiator?.ToPlayer();
-			if (bplayer != null)
+			if (!info.Initiator is BasePlayer) return;
+			if (info.Initiator is BaseNpc || info.Initiator is NPCPlayerApex ||
+				info.Initiator is NPCPlayer || info.Initiator is NPCMurderer ||
+				info.Initiator.name.Contains("scarecrow.prefab") ||
+				info.Initiator.name.Contains("/npc/scientist/htn")) return;
+			try
 			{
-				iplayer = bplayer.IPlayer;
-				if (iplayer == null) return;
+				bplayer = info.Initiator.ToPlayer();
+				if (bplayer != null && bplayer.IPlayer != null)
+				{
+					iplayer = bplayer.IPlayer;
+				}
 			}
+			catch {}
 		}
-		
+
 		string       resource = null;
 		string       ptype = null;
-		float        ptime = 0f;
-		TrackPlayer  ECEData;
-		ECEData.iplayer = null as IPlayer;
-		ECEData.time = 0f;
 
-		if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter") ||
-			victim is CH47HelicopterAIController || victim.name.Contains("ch47") ||
-			victim is BradleyAPC || victim.name.Contains("bradleyapc"))
+		if (bplayer == null)
+		{
+			float        ptime = 0f;
+			TrackPlayer  ECEData;
+			ECEData.iplayer = null as IPlayer;
+			ECEData.time = 0f;
+	
+			if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter") ||
+				victim is CH47HelicopterAIController || victim.name.Contains("ch47") ||
+				victim is BradleyAPC || victim.name.Contains("bradleyapc"))
 			{
-
+	
 				if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter"))
 				{
 					resource = "helicopter";
 					ptype = "k";
 				}
-
+	
 				else if (victim is CH47HelicopterAIController || victim.name.Contains("ch47"))
 				{
 					resource = "chinook";
@@ -1145,12 +1149,10 @@ public class RustRewards : RustPlugin
 					resource = "bradley";
 					ptype = "k";
 				}
-
-				BaseNetworkable entity = victim as BaseNetworkable;
 	
-				if (entity != null && entity.net.ID != null)
+				if (victim != null && victim.net.ID != null)
 				{
-					if (EntityCollectionCache.TryGetValue(entity.net.ID, out ECEData))
+					if (EntityCollectionCache.TryGetValue(victim.net.ID, out ECEData))
 					{
 						if (iplayer == null)
 						{
@@ -1158,11 +1160,11 @@ public class RustRewards : RustPlugin
 							iplayer = ECEData.iplayer;
 							bplayer = iplayer.Object as BasePlayer;
 						}
-						EntityCollectionCache.Remove(entity.net.ID);
+						EntityCollectionCache.Remove(victim.net.ID);
 					}
 				}
-
-				if (iplayer == null || bplayer == null) // could not find player from entity
+	
+				if (iplayer == null || bplayer == null) // could not find player from victim
 				{
 					// Puts("OED no player on heli/bradley/ch47");  
 					return;
@@ -1173,6 +1175,7 @@ public class RustRewards : RustPlugin
 					return;
 				}
 			}
+		}
 
 		if (iplayer == null || iplayer.Id == null) return; // if we did not find the player no one to give the reward to, we can exit
 
@@ -1271,7 +1274,6 @@ public class RustRewards : RustPlugin
 			{
 				bool isFriend = false;
 				victimplayer = victim.ToPlayer();
-				isFriend = false;
 
 				if (victimplayer == null || victimplayer.userID == null)
 				{
@@ -1283,7 +1285,7 @@ public class RustRewards : RustPlugin
 					Puts("tell mspeedie to warning PVP kill on: Victim / Killer / prefab name : " + victim.name + " (" + victimplayer.displayName + ") / " + bplayer.displayName + " / " + TrimPunctuation(victim.ShortPrefabName.ToLower()));
 
 				}
-				else if (iplayer.Id.CompareTo(victimplayer.userID) != 0)
+				else if (iplayer.Id == victimplayer.userID.ToString())
 					return;  // killed themselves
 				else
 				{
