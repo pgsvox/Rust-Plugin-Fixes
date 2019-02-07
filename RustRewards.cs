@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-[Info("Rust Rewards", "MSpeedie", "2.2.3")]
+[Info("Rust Rewards", "MSpeedie", "2.2.6")]
 [Description("Rewards players for activities using Economic or ServerRewards")]
 // Big Thank you to Tarek the original author of this plugin!
 // redBDGR, for maintaining the Barrel Points plugin
@@ -46,6 +46,7 @@ public class RustRewards : RustPlugin
 
 	private Dictionary<uint, TrackPlayer> EntityCollectionCache = new Dictionary<uint, TrackPlayer>(); // float has TOD_Sky.Instance.Cycle.Hour")
 	private Dictionary<string, string> playerPrefs = new Dictionary<string, string>();
+	private Dictionary<string, double> groupmultiplier = new Dictionary<string, double>();
 
 	const string permVIP = "rustrewards.vip";
 
@@ -53,7 +54,7 @@ public class RustRewards : RustPlugin
 	bool _didConfigChange;
 
 	private Oxide.Core.VersionNumber ConfigVersion;
-	
+
 	private bool serverrewardsloaded = false;
 	private bool economicsloaded = false;
 	private bool clansloaded = false;
@@ -76,6 +77,7 @@ public class RustRewards : RustPlugin
 	private bool TakeMoneyfromVictim = false;
 	private bool PrintInConsole = false;
 	private bool DoLogging = true;
+	private bool DoAdvancedVIP = false;
 	private bool ShowcurrencySymbol = true;
 	private bool HappyHour_Enabled = true;
 
@@ -182,6 +184,10 @@ public class RustRewards : RustPlugin
 	private double rate_activityreward = 1.0;
 	private double rate_welcomemoney = 1.0;
 
+	private string prestring = "<color=#CCBB00>";
+	private string midstring =  "</color><color=#FFFFFF>";
+	private string poststring = "</color>";
+
 	private Dictionary<IPlayer, int> Activity_Reward = new Dictionary<IPlayer, int>();
 
 	protected override void LoadDefaultConfig() { }
@@ -218,6 +224,7 @@ public class RustRewards : RustPlugin
 		try
 		{
 			if (data.TryGetValue(setting, out value)) return value;
+
 		}
 		catch
 		{
@@ -229,6 +236,14 @@ public class RustRewards : RustPlugin
 		_didConfigChange = true;
 		return value;
 	}
+
+    private void CheckCfg<T>(string Key, ref T var)
+    {
+        if (Config[Key] is T)
+            var = (T)Config[Key];
+        else
+            Config[Key] = var;
+    }
 
 	object SetConfigValue(string category, string setting, object defaultValue)
 	{
@@ -250,8 +265,34 @@ public class RustRewards : RustPlugin
 
 	private void CheckConfig()
 	{
-		if (UseEconomicsPlugin == false && UseServerRewardsPlugin == false)
-			PrintWarning("You need to select Economics or ServerReward or this plugin is pointless.");
+		if (VIPMultiplier_Enabled && DoAdvancedVIP)
+		{
+			Puts("Warning: you are running VIP Multiplier enabled and Do Advanced VIP which can lead to big multipliers!");
+		}
+
+		if (DoAdvancedVIP && groupmultiplier == null)
+		{
+			Puts("Error: You have selected Do Advanced VIP but did not specify and group with rates");
+		}
+
+		if (!UseEconomicsPlugin && !UseServerRewardsPlugin)
+			PrintWarning("Error: You need to select Economics or ServerReward or this plugin is pointless.");
+
+		if (UseEconomicsPlugin && UseServerRewardsPlugin)
+		{
+			PrintWarning("Error: You need to select Economics or ServerReward but not both!");
+			if (Economics.IsLoaded == true)
+			{
+				UseServerRewardsPlugin = false;
+				Puts("Warning: Switched to Economics as it is loaded");
+			}
+			else
+			{
+				UseEconomicsPlugin = false;
+				Puts("Warning: Switched to Server Rewards as Economics is not loaded");
+			}
+		}
+
 
 		try
 		{
@@ -262,7 +303,7 @@ public class RustRewards : RustPlugin
 					economicsloaded = true;
 				else
 				{
-					PrintWarning("Economics plugin was not found! Can't reward players using Economics.");
+					PrintWarning("Error: Economics plugin was not found! Can't reward players using Economics.");
 				}
 			}
 		}
@@ -280,7 +321,7 @@ public class RustRewards : RustPlugin
 					serverrewardsloaded = true;
 				else
 				{
-					PrintWarning("ServerRewards plugin was not found! Can't reward players using ServerRewards.");
+					PrintWarning("Error: ServerRewards plugin was not found! Can't reward players using ServerRewards.");
 				}
 			}
 		}
@@ -298,7 +339,7 @@ public class RustRewards : RustPlugin
 					friendsloaded = true;
 				else
 				{
-					PrintWarning("Friends plugin was not found! Can't check if victim is friend to killer.");
+					PrintWarning("Warning: Friends plugin was not found! Can't check if victim is friend to killer.");
 				}
 			}
 		}
@@ -317,7 +358,7 @@ public class RustRewards : RustPlugin
 				else
 				{
 
-					PrintWarning("Clans plugin was not found! Can't check if victim is in the same clan of killer.");
+					PrintWarning("Warning: Clans plugin was not found! Can't check if victim is in the same clan of killer.");
 				}
 			}
 		}
@@ -386,6 +427,7 @@ public class RustRewards : RustPlugin
 		//ConfigVersion = GetConfigValue("version", "version", VersionNumber);
 		NPCReward_Enabled = Convert.ToBoolean(GetConfigValue("settings", "NPCReward_Enabled", "true"));
 		VIPMultiplier_Enabled = Convert.ToBoolean(GetConfigValue("settings", "VIPMultiplier_Enabled", "false"));
+		DoAdvancedVIP = Convert.ToBoolean(GetConfigValue("settings", "Do_Advanced_VIP", "false"));
 		ActivityReward_Enabled = Convert.ToBoolean(GetConfigValue("settings", "ActivityReward_Enabled", "true"));
 		WelcomeMoney_Enabled = Convert.ToBoolean(GetConfigValue("settings", "WelcomeMoney_Enabled", "true"));
 		OpenReward_Enabled = Convert.ToBoolean(GetConfigValue("settings", "OpenReward_Enabled", "true"));
@@ -406,6 +448,10 @@ public class RustRewards : RustPlugin
 		ActivityReward_Minutes = Convert.ToInt32(GetConfigValue("settings", "ActivityReward_Minutes", 15));
 		HappyHour_BeginHour = Convert.ToInt32(GetConfigValue("settings", "HappyHour_BeginHour", 17));
 		HappyHour_EndHour = Convert.ToInt32(GetConfigValue("settings", "HappyHour_EndHour", 21));
+
+		prestring = Convert.ToString(GetConfigValue("settings", "Pre String", "<color=#CCBB00>"));
+		midstring = Convert.ToString(GetConfigValue("settings", "Mid String", "</color><color=#FFFFFF>"));
+		poststring = Convert.ToString(GetConfigValue("settings", "Post String", "</color>"));
 
 		mult_rocket = Convert.ToDouble(GetConfigValue("multipliers", "rocket", 1));
 		mult_flamethrower = Convert.ToDouble(GetConfigValue("multipliers", "flamethrower", 1));
@@ -504,6 +550,24 @@ public class RustRewards : RustPlugin
 		rate_activityreward = Convert.ToDouble(GetConfigValue("rates", "activityreward", 15));
 		rate_welcomemoney = Convert.ToDouble(GetConfigValue("rates", "welcomemoney", 50));
 
+		//sample group
+		Dictionary<string, double> samplegroup = new Dictionary<string, double>();
+		samplegroup.Add("vip", 1.5);
+		samplegroup.Add("default", 1.0);
+		//samplegroup.Add("admin", 2.0);
+		//samplegroup.Add("vip", 1.5);
+		//samplegroup.Add("mentor", 1.2);
+		//samplegroup.Add("esteemed", 1.1);
+		//samplegroup.Add("regular", 1.1);
+		//samplegroup.Add("default", 1.0);
+		
+		var json = JsonConvert.SerializeObject(GetConfigValue("groupsettings", "groupmultipliers", samplegroup));
+		groupmultiplier = JsonConvert.DeserializeObject<Dictionary<string, double>>(json);
+		
+		//if (groupmultiplier == null)
+		//	Puts("MT GM loaded :(");
+		//else Puts("gm count " + groupmultiplier.Count.ToString());
+
 		if (HappyHour_BeginHour > HappyHour_EndHour)
 			happyhourcross24 = true;
 		else
@@ -519,7 +583,7 @@ public class RustRewards : RustPlugin
 		}
 
 		Cleanertimer = timer.Once(600, CleanerTimerProcess);
-		
+
 	}
 
 	void OnServerInitialized()
@@ -547,7 +611,7 @@ public class RustRewards : RustPlugin
 				{
 					EntityCollectionCache.Remove(x.Key);
 				}
-				catch {} // probably deleted in the code while this was running				
+				catch {} // probably deleted in the code while this was running
 		}
 		Cleanertimer = timer.Once(600, CleanerTimerProcess);
 	}
@@ -643,19 +707,21 @@ public class RustRewards : RustPlugin
 	private void OnPlayerInit(BasePlayer player)
 	{
 		if (!Economics && !ServerRewards) return;
-		if (WelcomeMoney_Enabled == false) return;
-
 		IPlayer iplayer = player.IPlayer;
 
 		if (iplayer == null || iplayer.Id == null) return;
-		if (playerPrefs.ContainsKey(iplayer.Id)) return;
-
-		if (PrintInConsole)
-			Puts("New Player: " + iplayer.Name);
-		playerPrefs.Add(iplayer.Id, "hko");
-		dataFile.WriteObject(playerPrefs);
-		GiveReward(iplayer, "welcomemoney", null, null, 1);
+		if (playerPrefs.ContainsKey(iplayer.Id))return;
+		else
+		{
+			playerPrefs.Add(iplayer.Id, "hko");
+			dataFile.WriteObject(playerPrefs);
+			if (PrintInConsole)
+				Puts("New Player: " + iplayer.Name);
+			if (WelcomeMoney_Enabled)
+				GiveReward(iplayer, "welcomemoney", null, null, 1);
+		}
 	}
+
 
 	private void Unload()
 	{
@@ -685,7 +751,7 @@ public class RustRewards : RustPlugin
 			{
 				playerPrefs.TryGetValue(player.Id, out pref);
 				// catch and correct any corrupted preferences
-				if (string.IsNullOrEmpty(pref) || pref.Length > 3 || pref.Length < 1)
+				if (pref.Length > 3)
 					pref = "hko";
 			}
 			catch
@@ -694,12 +760,12 @@ public class RustRewards : RustPlugin
 			}
 		}
 
-		if (string.IsNullOrEmpty(ptype) || pref.Contains(ptype))
+		if (!string.IsNullOrEmpty(pref) && (string.IsNullOrEmpty(ptype) || pref.Contains(ptype)))
 		{
 			if (prefix == null)
 				player.Message(msg);
 			else
-				player.Message(String.Concat("<color=#CCBB00>" + prefix + "</color>: ", msg));
+				player.Message(String.Concat(prestring + prefix + ": "+ midstring , msg, poststring ));
 		}
 	}
 
@@ -841,7 +907,7 @@ public class RustRewards : RustPlugin
 
 		string shortName = item.info.shortname;
 		string resource = null;
-		
+
 
 		if (shortName.Contains("stone"))
 			resource = "stones";
@@ -932,7 +998,7 @@ public class RustRewards : RustPlugin
 
 	private void OnEntityKill(BaseNetworkable entity)
 	{
-		if (!OpenReward_Enabled && !KillReward_Enabled && !HarvestReward_Enabled) return;
+		if (!OpenReward_Enabled && !HarvestReward_Enabled) return;
 		if (entity == null || entity.net.ID == null) return;
 
 		TrackPlayer ECEData;
@@ -948,7 +1014,7 @@ public class RustRewards : RustPlugin
 			{
 				player    = ECEData.iplayer;
 				ptime     = ECEData.time;
-				EntityCollectionCache.Remove(entity.net.ID);
+				//EntityCollectionCache.Remove(entity.net.ID);
 			}
 			else return;
 		}
@@ -1064,23 +1130,9 @@ public class RustRewards : RustPlugin
 			}
 		}
 
-		if (KillReward_Enabled)
+		if (EntityCollectionCache.ContainsKey(entity.net.ID))
 		{
-			if (entity is BaseHelicopter || entity.ShortPrefabName.Contains("patrolhelicopter.prefab"))
-			{
-				resource = "helicopter";
-				ptype = "k";
-			}
-			else if (entity is BradleyAPC || entity.ShortPrefabName.Contains("bradleyapc.prefab"))
-			{
-				resource = "bradley";
-				ptype = "k";
-			}
-			else if (entity is CH47HelicopterAIController || entity.ShortPrefabName.Contains("ch47.prefab"))
-			{
-				resource = "chinook";
-				ptype = "k";
-			}
+			EntityCollectionCache.Remove(entity.net.ID);
 		}
 
 		if (ptype != null && resource != null)
@@ -1096,7 +1148,7 @@ public class RustRewards : RustPlugin
 		BasePlayer bplayer = null;
 		IPlayer    iplayer = null;
 
-		if (!KillReward_Enabled) return;
+		if (!OpenReward_Enabled && !KillReward_Enabled && !HarvestReward_Enabled) return;
 		if (victim == null || string.IsNullOrEmpty(victim.name)) return;
 		if ((victim.name.Contains("servergibs") || victim.name.Contains("corpse")) || victim.name.Contains("assets/prefabs/plants/")) return;  // no money for cleaning up the left over crash/corpse/plants
 		//Puts("oed victim.name: " + victim.name);
@@ -1127,18 +1179,18 @@ public class RustRewards : RustPlugin
 			TrackPlayer  ECEData;
 			ECEData.iplayer = null as IPlayer;
 			ECEData.time = 0f;
-	
+
 			if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter") ||
 				victim is CH47HelicopterAIController || victim.name.Contains("ch47") ||
 				victim is BradleyAPC || victim.name.Contains("bradleyapc"))
 			{
-	
+
 				if (victim is BaseHelicopter || victim.name.Contains("patrolhelicopter"))
 				{
 					resource = "helicopter";
 					ptype = "k";
 				}
-	
+
 				else if (victim is CH47HelicopterAIController || victim.name.Contains("ch47"))
 				{
 					resource = "chinook";
@@ -1149,7 +1201,7 @@ public class RustRewards : RustPlugin
 					resource = "bradley";
 					ptype = "k";
 				}
-	
+
 				if (victim != null && victim.net.ID != null)
 				{
 					if (EntityCollectionCache.TryGetValue(victim.net.ID, out ECEData))
@@ -1162,13 +1214,16 @@ public class RustRewards : RustPlugin
 						}
 						EntityCollectionCache.Remove(victim.net.ID);
 					}
+					else
+						return;  // they already got credit in kill
+
 				}
-	
+
 				if (iplayer == null || bplayer == null) // could not find player from victim
 				{
-					// Puts("OED no player on heli/bradley/ch47");  
+					// Puts("OED no player on heli/bradley/ch47");
 					return;
-				}  
+				}
 				else if (ptime != 0f && (TOD_Sky.Instance.Cycle.Hour - ptime) >=  shotclock)  // no data or action too old
 				{
 					// Puts ("OED ptime too old: " + ptime.ToString() + " : " + (TOD_Sky.Instance.Cycle.Hour - shotclock));
@@ -1350,16 +1405,15 @@ public class RustRewards : RustPlugin
 			}
 		}
 
-
 		// nothing to process
 		if (string.IsNullOrEmpty(resource) || string.IsNullOrEmpty(ptype)) return;  // did not find one to process
 
 		double     totalmultiplier = 1;
 		// compute applicable multipliers
-		if (ptype == "k" && (DistanceMultiplier_Enabled || WeaponMultiplier_Enabled) && 
+		if (ptype == "k" && (DistanceMultiplier_Enabled || WeaponMultiplier_Enabled) &&
 			info != null && info.Initiator != null && info.Initiator.ToPlayer() != null)
 		{
-			
+
 			if (info.WeaponPrefab != null  && !string.IsNullOrEmpty(info.WeaponPrefab.ShortPrefabName))
 			{
 				string weaponname = info?.WeaponPrefab?.ShortPrefabName;
@@ -1386,6 +1440,13 @@ public class RustRewards : RustPlugin
 		// safety checks
 		if (player == null || string.IsNullOrEmpty(reason) || multiplier < 0.001 ||
 			player is BaseNpc || player is NPCPlayerApex || player is NPCPlayer || player is NPCMurderer)
+			return;
+
+		if (ptype == "O" && !OpenReward_Enabled)
+			return;
+		else if (ptype == "K" && !KillReward_Enabled)
+			return;
+		else if (ptype == "H" && !HarvestReward_Enabled)
 			return;
 
 		double amount = 0;
@@ -1466,6 +1527,32 @@ public class RustRewards : RustPlugin
 		if (amount <= 0)
 			return;
 
+		//Puts("1: reason : ptype : " + reason + " : " + ptype);
+
+		else if (DoAdvancedVIP && groupmultiplier.Count != 0)
+		{
+			double temp_mult = 1.0;
+			// loop through groupmultiplier till there is a hit on the table or none left
+			//Puts("count gm: " + groupmultiplier.Count);
+			foreach(KeyValuePair<string, double> gm in groupmultiplier)
+			{
+				if (string.IsNullOrEmpty(gm.Key))
+				{
+					Puts("Empty GM name please check your json");
+				}
+				//else
+				//	Puts(gm.Key + " : " + gm.Value.ToString());
+
+				if (!string.IsNullOrEmpty(gm.Key) &&  player.BelongsToGroup(gm.Key))
+				{
+					if (gm.Value > temp_mult) temp_mult = gm.Value;
+				}				
+			}
+			//Puts("multiplier: " + multiplier.ToString());
+			//Puts("temp_mult: " + temp_mult.ToString());
+			multiplier = multiplier * temp_mult;
+		}
+
 		// make sure multipler is not zero
 		if (multiplier <= 0)
 		{
@@ -1484,7 +1571,18 @@ public class RustRewards : RustPlugin
 			Puts("Net amount is too small: " + amount);
 
 		//  these use to be both if but it seems odd to me to pay in two currencies at the same rate
-		if (UseEconomicsPlugin)
+		if (UseServerRewardsPlugin)
+		{
+			amount = Math.Round(amount, 0);
+			if (reason == "player" && TakeMoneyfromVictim && string.IsNullOrEmpty(victim.UserIDString))
+			{
+				ServerRewards?.Call("AddPoints", player.Id, (int)(amount));
+				ServerRewards?.Call("TakePoints", victim.userID, (int)(amount));
+			}
+			else
+				ServerRewards?.Call("AddPoints", player.Id, (int)(amount));
+		}
+		else if (UseEconomicsPlugin)
 		{
 			if (reason == "player" && TakeMoneyfromVictim && string.IsNullOrEmpty(victim.UserIDString))
 			{
@@ -1497,17 +1595,6 @@ public class RustRewards : RustPlugin
 			}
 			else
 				Economics?.Call("Deposit", player.Id, amount);
-		}
-		else if (UseServerRewardsPlugin)
-		{
-			amount = Math.Round(amount, 0);
-			if (reason == "player" && TakeMoneyfromVictim && string.IsNullOrEmpty(victim.UserIDString))
-			{
-				ServerRewards?.Call("AddPoints", player.Id, (int)(amount));
-				ServerRewards?.Call("TakePoints", victim.userID, (int)(amount));
-			}
-			else
-				ServerRewards?.Call("AddPoints", player.Id, (int)(amount));
 		}
 		if (ShowcurrencySymbol)
 			MessagePlayer(player, Lang(reason, player.Id, amount.ToString("C", CurrencyCulture)), Lang("Prefix"), ptype);
