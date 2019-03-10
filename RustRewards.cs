@@ -17,7 +17,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-[Info("Rust Rewards", "MSpeedie", "2.2.6")]
+[Info("Rust Rewards", "MSpeedie", "2.2.13")]
 [Description("Rewards players for activities using Economic or ServerRewards")]
 // Big Thank you to Tarek the original author of this plugin!
 // redBDGR, for maintaining the Barrel Points plugin
@@ -31,11 +31,14 @@ public class RustRewards : RustPlugin
 	[PluginReference] Plugin ServerRewards;
 	[PluginReference] Plugin Clans;
 	[PluginReference] Plugin Friends;
+	[PluginReference] Plugin ZoneManager;
 
     public Oxide.Core.VersionNumber Version { get; set; }
 	readonly private CultureInfo CurrencyCulture = CultureInfo.CreateSpecificCulture("en-US");  // change this to change the currency symbol
 	readonly DynamicConfigFile dataFile = Interface.Oxide.DataFileSystem.GetFile("RustRewards");
+	readonly DynamicConfigFile zdataFile = Interface.Oxide.DataFileSystem.GetFile("RustRewards-Zones");
 	private Timer Cleanertimer; // used to clean up tracking of folks damaging entities
+	private Timer timecheck;
 
 	private struct TrackPlayer
 	{
@@ -46,6 +49,7 @@ public class RustRewards : RustPlugin
 
 	private Dictionary<uint, TrackPlayer> EntityCollectionCache = new Dictionary<uint, TrackPlayer>(); // float has TOD_Sky.Instance.Cycle.Hour")
 	private Dictionary<string, string> playerPrefs = new Dictionary<string, string>();
+	private Dictionary<string, double> zonemultipliers = new Dictionary<string, double>();
 	private Dictionary<string, double> groupmultiplier = new Dictionary<string, double>();
 
 	const string permVIP = "rustrewards.vip";
@@ -84,8 +88,6 @@ public class RustRewards : RustPlugin
 	private int ActivityReward_Minutes = 15;
 	private int HappyHour_BeginHour = 18;
 	private int HappyHour_EndHour = 21;
-
-	private Timer timecheck;
 
 	private double mult_rocket = 1.0;
 	private double mult_flamethrower = 1.0;
@@ -184,6 +186,7 @@ public class RustRewards : RustPlugin
 	private double rate_activityreward = 1.0;
 	private double rate_welcomemoney = 1.0;
 
+	private string player_default_settings = "hko";
 	private string prestring = "<color=#CCBB00>";
 	private string midstring =  "</color><color=#FFFFFF>";
 	private string poststring = "</color>";
@@ -449,6 +452,8 @@ public class RustRewards : RustPlugin
 		HappyHour_BeginHour = Convert.ToInt32(GetConfigValue("settings", "HappyHour_BeginHour", 17));
 		HappyHour_EndHour = Convert.ToInt32(GetConfigValue("settings", "HappyHour_EndHour", 21));
 
+		player_default_settings = Convert.ToString(GetConfigValue("settings", "Player Default Settings", "hko"));
+
 		prestring = Convert.ToString(GetConfigValue("settings", "Pre String", "<color=#CCBB00>"));
 		midstring = Convert.ToString(GetConfigValue("settings", "Mid String", "</color><color=#FFFFFF>"));
 		poststring = Convert.ToString(GetConfigValue("settings", "Post String", "</color>"));
@@ -560,10 +565,10 @@ public class RustRewards : RustPlugin
 		//samplegroup.Add("esteemed", 1.1);
 		//samplegroup.Add("regular", 1.1);
 		//samplegroup.Add("default", 1.0);
-		
+
 		var json = JsonConvert.SerializeObject(GetConfigValue("groupsettings", "groupmultipliers", samplegroup));
 		groupmultiplier = JsonConvert.DeserializeObject<Dictionary<string, double>>(json);
-		
+
 		//if (groupmultiplier == null)
 		//	Puts("MT GM loaded :(");
 		//else Puts("gm count " + groupmultiplier.Count.ToString());
@@ -591,7 +596,8 @@ public class RustRewards : RustPlugin
 		permission.RegisterPermission(permVIP, this);
 		LoadDefaultMessages();
 
-		playerPrefs = dataFile.ReadObject<Dictionary<string, string>>();
+		playerPrefs     =  dataFile.ReadObject<Dictionary<string, string>>();
+		zonemultipliers = zdataFile.ReadObject<Dictionary<string, double>>();
 
 		LoadConfigValues();
 
@@ -685,7 +691,8 @@ public class RustRewards : RustPlugin
 					happyhouractive = true;
 					if (PrintInConsole)
 						Puts("Happy hour(s) started.  Ending at " + HappyHour_EndHour);
-					BroadcastMessage(Lang("happyhourstart"), Lang("Prefix"));
+					if (ip != null)
+						BroadcastMessage(Lang("happyhourstart", ip.Id), Lang("Prefix", ip.Id));
 				}
 			}
 			else
@@ -697,7 +704,8 @@ public class RustRewards : RustPlugin
 					happyhouractive = false;
 					if (PrintInConsole)
 						Puts("Happy Hour(s) ended.  Next Happy Hour(s) starts at " + HappyHour_BeginHour);
-					BroadcastMessage(Lang("happyhourend"), Lang("Prefix"));
+					if (ip != null)
+						BroadcastMessage(Lang("happyhourend", ip.Id), Lang("Prefix", ip.Id));
 				}
 			}
 		}
@@ -713,7 +721,7 @@ public class RustRewards : RustPlugin
 		if (playerPrefs.ContainsKey(iplayer.Id))return;
 		else
 		{
-			playerPrefs.Add(iplayer.Id, "hko");
+			playerPrefs.Add(iplayer.Id, player_default_settings);
 			dataFile.WriteObject(playerPrefs);
 			if (PrintInConsole)
 				Puts("New Player: " + iplayer.Name);
@@ -742,7 +750,7 @@ public class RustRewards : RustPlugin
 	private void MessagePlayer(IPlayer player, string msg, string prefix, string ptype)
 	{
 		// we check ptype (prefence type) to see if the player wants to see these
-		string pref = "hko";
+		string pref = player_default_settings;
 
 		if (player == null || string.IsNullOrEmpty(msg) || player.Id == null) return;
 		else
@@ -752,11 +760,11 @@ public class RustRewards : RustPlugin
 				playerPrefs.TryGetValue(player.Id, out pref);
 				// catch and correct any corrupted preferences
 				if (pref.Length > 3)
-					pref = "hko";
+					pref = player_default_settings;
 			}
 			catch
 			{
-				pref = "hko";
+				pref = player_default_settings;
 			}
 		}
 
@@ -1158,7 +1166,7 @@ public class RustRewards : RustPlugin
 			if (info.Initiator is BaseNpc || info.Initiator is NPCPlayerApex ||
 				info.Initiator is NPCPlayer || info.Initiator is NPCMurderer ||
 				info.Initiator.name.Contains("scarecrow.prefab") ||
-				info.Initiator.name.Contains("/npc/scientist/htn")) return;
+				(info.Initiator is BasePlayer && (info.Initiator as BasePlayer).IsNpc)) return;
 			try
 			{
 				bplayer = info.Initiator.ToPlayer();
@@ -1268,7 +1276,7 @@ public class RustRewards : RustPlugin
 				resource = "chinook";
 				ptype = "k";
 			}
-			else if (victim.name.Contains("assets/rust.ai/agents/") && !victim.name.Contains("corpse"))
+			else if (victim.name.Contains("assets/rust.ai/agents/") && !victim.name.Contains("corpse")  && !victim.name.Contains("scientist") && !victim.name.Contains("human"))
 			{
 				ptype = "k";
 				if (victim.name.Contains("stag"))
@@ -1306,19 +1314,17 @@ public class RustRewards : RustPlugin
 				}
 			}
 			else if (victim is BaseNpc || victim is NPCPlayerApex || victim is NPCPlayer || victim is Scientist || victim is NPCMurderer ||
-					victim.name.Contains("scarecrow.prefab") || victim.name.Contains("scientist/htn") ||
-					victim.name.Contains("scientistgunner") || victim.name.Contains("scientistastar") || victim.name.Contains("scientistturret"))
+					(victim is BasePlayer && (victim as BasePlayer).IsNpc))
 			{
 				ptype = "k";
 				if (!NPCReward_Enabled) return;
-				else if (victim is Scientist || victim.name.Contains("scientist/htn") ||
-						 victim.name.Contains("scientistgunner") || victim.name.Contains("scientistastar") || victim.name.Contains("scientistturret"))
-				{
-					resource = "scientist";
-				}
-				else if (victim is NPCMurderer || victim.name.Contains("scarecrow.prefab"))
+				else if (victim is NPCMurderer || (!string.IsNullOrEmpty(victim.name) && victim.name.Contains("scarecrow.prefab")))
 				{
 					resource = "murderer";
+				}
+				else if (victim is Scientist || victim is NPCPlayerApex)
+				{
+					resource = "scientist";
 				}
 				else
 				{
@@ -1546,7 +1552,32 @@ public class RustRewards : RustPlugin
 				if (!string.IsNullOrEmpty(gm.Key) &&  player.BelongsToGroup(gm.Key))
 				{
 					if (gm.Value > temp_mult) temp_mult = gm.Value;
-				}				
+				}
+			}
+			//Puts("multiplier: " + multiplier.ToString());
+			//Puts("temp_mult: " + temp_mult.ToString());
+			multiplier = multiplier * temp_mult;
+		}
+
+		//Puts("count zm: " + zonemultipliers.Count);
+		if (zonemultipliers.Count > 0)
+		{
+			double temp_mult = 1.0;
+			// loop through zonemultipliers till there is a hit on the table or none left
+			//Puts("count zm: " + zonemultipliers.Count);
+			foreach(KeyValuePair<string, double> zm in zonemultipliers)
+			{
+				if (string.IsNullOrEmpty(zm.Key))
+				{
+					Puts("Empty ZM name please check your json");
+				}
+				//else
+				//	Puts(zm.Key + " : " + zm.Value.ToString());
+
+				if (!string.IsNullOrEmpty(zm.Key) && (bool)ZoneManager?.Call("isPlayerInZone",zm.Key, player.Object as BasePlayer))
+				{
+					if (zm.Value > temp_mult) temp_mult = zm.Value;
+				}
 			}
 			//Puts("multiplier: " + multiplier.ToString());
 			//Puts("temp_mult: " + temp_mult.ToString());
@@ -1588,7 +1619,7 @@ public class RustRewards : RustPlugin
 			{
 				if (!(bool)Economics?.Call("Transfer", victim.UserIDString, player.Id, amount))
 				{
-					MessagePlayer(player, Lang("VictimNoMoney", player.Id, victim.displayName), Lang("Prefix"), "k");
+					MessagePlayer(player, Lang("VictimNoMoney", player.Id, victim.displayName), Lang("Prefix", player.Id), "k");
 				}
 				else
 					Economics?.Call("Deposit", player.Id, amount);
@@ -1597,9 +1628,9 @@ public class RustRewards : RustPlugin
 				Economics?.Call("Deposit", player.Id, amount);
 		}
 		if (ShowcurrencySymbol)
-			MessagePlayer(player, Lang(reason, player.Id, amount.ToString("C", CurrencyCulture)), Lang("Prefix"), ptype);
+			MessagePlayer(player, Lang(reason, player.Id, amount.ToString("C", CurrencyCulture)), Lang("Prefix", player.Id), ptype);
 		else
-			MessagePlayer(player, Lang(reason, player.Id, amount), Lang("Prefix"), ptype);
+			MessagePlayer(player, Lang(reason, player.Id, amount), Lang("Prefix", player.Id), ptype);
 
 		if (DoLogging)
 		{
@@ -1619,41 +1650,41 @@ public class RustRewards : RustPlugin
 		IPlayer iplayer = player.IPlayer;
 
 		bool pstate = true;
-		string pref = "hko";   // Havest, Kill, and Open
+		string pref = player_default_settings;   // Havest, Kill, and Open
 		string pstateString = null;
 		string ptype = null;
 		string ptypeString = null;
 
 		if (args.Length < 2)
 		{
-			MessagePlayer(iplayer, Lang("rrm syntax", iplayer.Id), Lang("Prefix"), null);
+			MessagePlayer(iplayer, Lang("rrm syntax", iplayer.Id), Lang("Prefix", iplayer.Id), null);
 			return;
 		}
 		else
 		{
 			if (string.IsNullOrEmpty(args[0]) || args[0].Length > 1)
 			{
-				MessagePlayer(iplayer, Lang("rrm type", iplayer.Id), Lang("Prefix"), null);
+				MessagePlayer(iplayer, Lang("rrm type", iplayer.Id), Lang("Prefix", iplayer.Id), null);
 				return;
 			}
 
 			if (string.IsNullOrEmpty(args[1]) || args[1].Length < 2)
 			{
-				MessagePlayer(iplayer, Lang("rrm state", iplayer.Id), Lang("Prefix"), null);
+				MessagePlayer(iplayer, Lang("rrm state", iplayer.Id), Lang("Prefix", iplayer.Id), null);
 				return;
 			}
 
 			ptype = args[0].ToLower().Substring(0, 1);
 			if (ptype != "h" && ptype != "k" && ptype != "o")
 			{
-				MessagePlayer(iplayer, Lang("rrm type", iplayer.Id), Lang("Prefix"), null);
+				MessagePlayer(iplayer, Lang("rrm type", iplayer.Id), Lang("Prefix", iplayer.Id), null);
 				return;
 			}
 
 			pstateString = args[1].ToLower().Substring(0, 2);
 			if (pstateString != "on" && pstateString != "of" && pstateString != "tr" && pstateString != "fa" && pstateString != "ye" && pstateString != "no")
 			{
-				MessagePlayer(iplayer, Lang("rrm state", iplayer.Id), Lang("Prefix"), null);
+				MessagePlayer(iplayer, Lang("rrm state", iplayer.Id), Lang("Prefix", iplayer.Id), null);
 				return;
 			}
 			else
@@ -1671,7 +1702,7 @@ public class RustRewards : RustPlugin
 				playerPrefs.TryGetValue(iplayer.Id, out pref);
 			else
 			{
-				pref = "hko";
+				pref = player_default_settings;
 				playerPrefs.Add(iplayer.Id, pref);
 			}
 		}
@@ -1679,7 +1710,7 @@ public class RustRewards : RustPlugin
 		{
 			try
 			{
-				pref = "hko";
+				pref = player_default_settings;
 				playerPrefs.Add(iplayer.Id, pref);
 			}
 			catch { }
@@ -1709,7 +1740,7 @@ public class RustRewards : RustPlugin
 			ptypeString = "opening";
 
 
-		MessagePlayer(iplayer, Lang("rrm change", iplayer.Id, ptypeString, pstateString), Lang("Prefix"), null);
+		MessagePlayer(iplayer, Lang("rrm change", iplayer.Id, ptypeString, pstateString), Lang("Prefix", iplayer.Id), null);
 		// Puts (pref + " : " + pstateString + " : " + ptype);
 	}
 	#endregion

@@ -4,13 +4,21 @@ using System.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Game.Rust.Cui;
+using System.Reflection;
+using Oxide.Core.Plugins;
+using Oxide.Core.CSharp;
+using UnityEngine.UI;
+using System.Collections;
+using Oxide.Game.Rust.Cui;
+using Oxide.Core.Configuration;
+using Oxide.Core.Libraries.Covalence;
 using Rust;
 using System.IO;
 using UnityEngine;
 
 namespace Oxide.Plugins {
- [Info("DamageControl", "mspeedie", "2.3.6", ResourceId = 2677)]
- [Description("Allows authorized users to control damage settings for time, boats, animals, apc, barrels, buildings, bgrades, heli, npcs, players and zombies")]
+ [Info("DamageControl", "MSpeedie", "2.5.4")]
+ [Description("Allows authorized users to control damage settings for Time, animals, apc, minicopter, balloons, barrels, buildings, bgrades, heli, npcs, players and zombies")]
  // internal class DamageControl : RustPlugin
  class DamageControl: CovalencePlugin {
   // note we check isAdmin as well so Admins get this by default
@@ -38,12 +46,16 @@ namespace Oxide.Plugins {
    "set"
   };
 
+	readonly DynamicConfigFile dataFile = Interface.Oxide.DataFileSystem.GetFile("DamageControl");
+	private Dictionary<string, float> EntityModifier = new Dictionary<string, float>();
+
+
   // Class
   // note the code does some mapping as well:
   // bradley = apc
   // scientist = npc
   // heli = helicopter
-  // murderer = zombie  (I know they are different but how often to do use both at the same time?)
+  // scarecrows, murderer = zombie  (I know they are different but how often to do use both at the same time?)
   readonly List < string > dclass = new List < string > {
    "chicken",
    "bear",
@@ -54,16 +66,24 @@ namespace Oxide.Plugins {
    "buildingblock",
    "npc",
    "player",
-   "time",
+   "GlobalTime",
+   "PlayerTime",
+   "AnimalTime",
+   "NPCTime",
+   "OtherTime",
+   "HeliTime",
+   "BradleyTime",
    "zombie",
    "apc",
    "helicopter",
    "building",
    "bgrade",
-   "boat"
+   "ballon",
+   "minicopter",
+   "samsite"
   };
 
-  // time types
+  // Time types
   readonly List < string > ttype = new List < string > {
   "0",
   "1",
@@ -153,6 +173,7 @@ namespace Oxide.Plugins {
   // arrays of multipliers by class and one with zero to make buidlings immuned
   float[] _Zeromultipliers = new float[DamageTypeMax]; // immuned, zero damage
   float[] _Onemultipliers = new float[DamageTypeMax]; // normal damage
+  
 
 
   // Animals
@@ -163,16 +184,24 @@ namespace Oxide.Plugins {
   float[] _Stagmultipliers = new float[DamageTypeMax]; // Stag
   float[] _Wolfmultipliers = new float[DamageTypeMax]; // Wolf
 
-  float[] _Boatmultipliers = new float[DamageTypeMax]; // Boats
+  float[] _Balloonmultipliers = new float[DamageTypeMax]; // Balloon
+  float[] _Minicoptermultipliers = new float[DamageTypeMax]; // Minicopter
+  float[] _SAMSitemultipliers = new float[DamageTypeMax]; // SAMSite
   float[] _Buildingmultipliers = new float[DamageTypeMax]; // Buildings
-  float[] _Zombiemultipliers = new float[DamageTypeMax]; // Murderer (Halloween) and Zombies
+  float[] _Zombiemultipliers = new float[DamageTypeMax]; // Scarecrow, Murderer (Halloween) and Zombies
   float[] _Playermultipliers = new float[DamageTypeMax]; // Players
   float[] _NPCmultipliers = new float[DamageTypeMax]; // Scientists and NPCs
   float[] _APCmultipliers = new float[DamageTypeMax]; // APC aka Bradley
   float[] _Helimultipliers = new float[DamageTypeMax]; // Helicopter
 
-  // time multiplier
-  float[] _Timemultipliers = new float[24]; // Per Hour Multiplier
+  // Time multiplier
+  float[] _GlobalTimemultipliers = new float[24];  // Global Per Hour Multiplier
+  float[] _PlayerTimemultipliers = new float[24];  // Player Per Hour Multiplier
+  float[] _AnimalTimemultipliers = new float[24];  // Animal Per Hour Multiplier
+  float[] _NPCTimemultipliers = new float[24];     // NPC Per Hour Multiplier
+  float[] _HeliTimemultipliers = new float[24];    // Heli Per Hour Multiplier
+  float[] _BradleyTimemultipliers = new float[24]; // Bradley Per Hour Multiplier
+  float[] _OtherTimemultipliers = new float[24];   // Other Per Hour Multiplier
 
   // bgrade multipliers
   float _TwigsMultiplier  = 1.0F; // Twigs Multiplier
@@ -180,6 +209,12 @@ namespace Oxide.Plugins {
   float _StoneMultiplier = 1.0F; // Stone Multiplier
   float _MetalMultiplier = 1.0F; // Metal Multiplier
   float _TopTierMultiplier = 1.0F; // TopTier Multiplier
+
+  // bypasses if set these set damage to minimum of 1 times even if the prior settings set it below that
+  // bypasses, warning these could be used to grief bases in PVE
+  // note these apply the bgrade multipler after this one so you could for example make twigs take massive damage from the heli (cackle)
+  bool Heli_bypass     = false; // Heli bypass
+
 
   // to indicate I need to update the json file
   bool _didConfigChange;
@@ -189,9 +224,10 @@ namespace Oxide.Plugins {
    // LoadDefaultMessages();  // Done Automatically
    LoadConfigValues();
    build_dep_list();
+   EntityModifier = dataFile.ReadObject<Dictionary<string, float>>();
   }
 
-  void LoadDefaultMessages() {
+  protected override void LoadDefaultMessages() {
    // English
    lang.RegisterMessages(new Dictionary < string, string > {
     // general messages
@@ -201,7 +237,7 @@ namespace Oxide.Plugins {
     ["wrongsyntaxList"] = "Incorrect Syntax used for action List. Parameters are optionally: Class, Type.",
     ["wrongsyntaxSet"] = "Incorrect Syntax used for action Set. Parameters are: Class, Type, Value.",
     ["wrongaction"] = "Action can be Help, List or Set.",
-    ["wrongclass"] = "Class can only be set to one of Boat, Bear, Boar, Chicken, Horse, Stag, Wolf, APC (or Bradley), BGrade, Building, BuildingBlock, Player, Heli, NPC (which includes scientists) , Zombie (which includes Murderers).",
+    ["wrongclass"] = "Class can only be set to one of SAMSite, Minicopter, Balloon, Bear, Boar, Chicken, Horse, Stag, Wolf, APC (or Bradley), BGrade, Building, BuildingBlock, Player, Heli, NPC (which includes scientists) , Zombie (which includes Scarecrows, Murderers).",
     ["wrongbtype"] = "That is not a supported type: allowdecay, foundation, wall, floor, door, stair, roof, highexternal, barrel, other.",
     ["wrongttype"] = "That is not a supported type: 0 through 23.",
     ["wrongbgtype"] = "That is not a supported type: twigs, wood, stone, metal, toptier. (or 0-4)",
@@ -227,19 +263,28 @@ namespace Oxide.Plugins {
     ["apc"] = "APC aka Bradley",
     ["bear"] = "bear",
     ["boar"] = "boar",
+    ["balloon"] = "Balloon",
     ["building"] = "Building",
     ["buildingblock"] = "Building Block",
     ["chicken"] = "Chicken",
     ["heli"] = "Helicopter",
     ["horse"] = "Horse",
+	["minicopter"] = "Minicopter",
+	["samsite"] = "SAMSite",
     ["npc"] = "NPC aka Scientist",
     ["player"] = "Player",
     ["stag"] = "Stag",
-	["time"] = "Time",
+	["GlobalTime"] = "Global Time",
+	["PlayerTime"] = "PLayer Time",
+	["AnimalTime"] = "Animal Time",
+	["NPCTime"] = "NPC Time",
+	["HeliTime"] = "Heli Time",
+	["BradleyTime"] = "Bradley Time",
+	["OtherTime"] = "Other Time",
 	["bgrade"] = "Build Grade",
     ["wolf"] = "Wolf",
-    ["zombie"] = "Zombie and Murderer",
-    ["murderer"] = "Zombie and Murderer",
+    ["zombie"] = "Zombie, Murderer and Scarecrows",
+    ["murderer"] = "Zombie, Murderer and Scarecrows",
     ["scientist"] = "NPC aka Scientist",
     // Damage Types
     ["arrow"] = "Arrow",
@@ -307,25 +352,56 @@ namespace Oxide.Plugins {
    foreach(DamageType val in Enum.GetValues(typeof(DamageType))) {
     if (val == DamageType.LAST) continue;
     _APCmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("APC_Multipliers", val.ToString().ToLower(), 1.0));
+    _Balloonmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Balloon_Multipliers", val.ToString().ToLower(), 1.0));
     _Bearmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Bear_Multipliers", val.ToString().ToLower(), 1.0));
     _Boarmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Boar_Multipliers", val.ToString().ToLower(), 1.0));
-    _Boatmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Boat_Multipliers", val.ToString().ToLower(), 1.0));
     _Buildingmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("BuildingBlock_Multipliers", val.ToString().ToLower(), 1.0));
     _Chickenmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Chicken_Multipliers", val.ToString().ToLower(), 1.0));
     _Helimultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Heli_Multipliers", val.ToString().ToLower(), 1.0));
     _Horsemultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Horse_Multipliers", val.ToString().ToLower(), 1.0));
+    _SAMSitemultipliers[(int) val] = Convert.ToSingle(GetConfigValue("SAMSite_Multipliers", val.ToString().ToLower(), 1.0));
+    _Minicoptermultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Minicopter_Multipliers", val.ToString().ToLower(), 1.0));
     _NPCmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Scientist_Multipliers", val.ToString().ToLower(), 1.0));
     _Playermultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Player_Multipliers", val.ToString().ToLower(), 1.0));
     _Stagmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Stag_Multipliers", val.ToString().ToLower(), 1.0));
     _Wolfmultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Wolf_Multipliers", val.ToString().ToLower(), 1.0));
-    _Zombiemultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Zombie_Multipliers", val.ToString().ToLower(), 1.0)); // also murderers
+    _Zombiemultipliers[(int) val] = Convert.ToSingle(GetConfigValue("Zombie_Multipliers", val.ToString().ToLower(), 1.0)); // also murderers and scarecrows
     _Zeromultipliers[(int) val] = 0;
     _Onemultipliers[(int) val] = 1;
 	}
+   for (var i = 0; i < 24; i++) {
+	   // Puts(i.ToString());
+       _GlobalTimemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("Global_Time_Multipliers", i.ToString().PadLeft(2,' '), 1.0)); // Time in hours
+   }
 
    for (var i = 0; i < 24; i++) {
 	   // Puts(i.ToString());
-       _Timemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("Time_Multipliers", i.ToString(), 1.0)); // time in hours
+       _PlayerTimemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("Player_Time_Multipliers", i.ToString().PadLeft(2,' '), 1.0)); // Time in hours
+   }
+
+   for (var i = 0; i < 24; i++) {
+	   // Puts(i.ToString());
+       _AnimalTimemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("Animal_Time_Multipliers", i.ToString().PadLeft(2,' '), 1.0)); // Time in hours
+   }
+
+   for (var i = 0; i < 24; i++) {
+	   // Puts(i.ToString());
+       _NPCTimemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("NPC_Time_Multipliers", i.ToString().PadLeft(2,' '), 1.0)); // Time in hours
+   }
+
+   for (var i = 0; i < 24; i++) {
+	   // Puts(i.ToString());
+       _HeliTimemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("Heli_Time_Multipliers", i.ToString().PadLeft(2,' '), 1.0)); // Time in hours
+   }
+
+   for (var i = 0; i < 24; i++) {
+	   // Puts(i.ToString());
+       _BradleyTimemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("Bradley_Time_Multipliers", i.ToString().PadLeft(2,' '), 1.0)); // Time in hours
+   }
+
+   for (var i = 0; i < 24; i++) {
+	   // Puts(i.ToString());
+       _OtherTimemultipliers[(int) i] = Convert.ToSingle(GetConfigValue("Other_Time_Multipliers", i.ToString().PadLeft(2,' '), 1.0)); // Time in hours
    }
 
    ModifyFoundation = Convert.ToSingle(GetConfigValue("Building", "ModifyFoundation",  1.0));
@@ -348,42 +424,49 @@ namespace Oxide.Plugins {
    _MetalMultiplier   = Convert.ToSingle(GetConfigValue("Building_Grade_Multipliers", "Metal",   1.0));
    _TopTierMultiplier = Convert.ToSingle(GetConfigValue("Building_Grade_Multipliers", "TopTier", 1.0));
 
+   Heli_bypass    = Convert.ToBoolean(GetConfigValue("Bypasses", "Heli_bypass", "false"));
+
+
    if (!_didConfigChange) return;
    Puts("Configuration file updated.");
    SaveConfig();
   }
 
-  object GetConfigValue(string category, string setting, object defaultValue) {
-   var data = Config[category] as Dictionary < string, object > ;
-   object value;
-   if (data == null) {
-    data = new Dictionary < string, object > ();
-    Config[category] = data;
-    _didConfigChange = true;
-   }
+	object GetConfigValue(string category, string setting, object defaultValue)
+	{
+		var data = Config[category] as Dictionary < string, object > ;
+		object value;
+		if (data == null)
+		{
+			data = new Dictionary < string, object > ();
+			Config[category] = data;
+			_didConfigChange = true;
+		}
 
-   if (data.TryGetValue(setting, out value)) return value;
-   value = defaultValue;
-   data[setting] = value;
-   _didConfigChange = true;
-   return value;
-  }
+		if (data.TryGetValue(setting, out value)) return value;
+		value = defaultValue;
+		data[setting] = value;
+		_didConfigChange = true;
+		return value;
+	}
 
-  object SetConfigValue(string category, string setting, object defaultValue) {
-   var data = Config[category] as Dictionary < string, object > ;
-   object value;
+	object SetConfigValue(string category, string setting, object defaultValue)
+	{
+		var data = Config[category] as Dictionary < string, object > ;
+		object value;
 
-   if (data == null) {
-    data = new Dictionary < string, object > ();
-    Config[category] = data;
-    _didConfigChange = true;
-   }
+		if (data == null)
+		{
+		data = new Dictionary < string, object > ();
+		Config[category] = data;
+		_didConfigChange = true;
+		}
 
-   value = defaultValue;
-   data[setting] = value;
-   _didConfigChange = true;
-   return value;
-  }
+		value = defaultValue;
+		data[setting] = value;
+		_didConfigChange = true;
+		return value;
+	}
 
   [Command("DamageControl", "damagecontrol", "damcon", "dc","global.dc","global.DamageControl")]
   void chatCommand_DamageControl(IPlayer iplayer, string command, string[] args) {
@@ -506,7 +589,7 @@ namespace Oxide.Plugins {
 		newbool = false;
 		}
 
-		if (paramaclass.Contains("time")) {
+		if (paramaclass.Contains("Time")) {
 			// check type values
 			if (!ttype.Contains(paramatype)) {
 				iplayer.Reply(Lang("wrongttype", iplayer.Id, args[2]));
@@ -553,6 +636,14 @@ namespace Oxide.Plugins {
 		{
 			SetConfigValue("Building_Grade_Multipliers", paramatype, newnumber);
 		}
+		else if (paramaclass.Contains("bypasses")) 
+		{
+			if (paramatype.Contains("heli_bypass")) 
+			{
+				Heli_bypass = newbool;
+				SetConfigValue("Bypasses", "Heli_bypass", newbool);
+			}
+		}
 		else if (paramaclass.Contains("build") && !paramaclass.Contains("block")) {
 		if (paramatype.Contains("decay")) {
 			AllowDecay = newbool;
@@ -594,15 +685,19 @@ namespace Oxide.Plugins {
 
 		} else if (paramaclass.Contains("build") && paramaclass.Contains("block")) {
 		SetConfigValue("BuildingBlock_Multipliers", paramatype, newnumber);
-		} else if (paramaclass.Contains("boat") || paramaclass.Contains("rhib") || paramaclass.Contains("rowboat")) {
-		SetConfigValue("Boat_Multipliers", paramatype, newnumber);
 		} else if (paramaclass.Contains("apc") || paramaclass.Contains("bradley")) {
 		SetConfigValue("APC_Multipliers", paramatype, newnumber);
 		} else if (paramaclass.Contains("heli")) {
 		SetConfigValue("Heli_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("balloon")) {
+		SetConfigValue("Balloon_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("minicopter")) {
+		SetConfigValue("Minicopter_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("samsite")) {
+		SetConfigValue("SAMSite_Multipliers", paramatype, newnumber);
 		} else if (paramaclass.Contains("npc") || paramaclass.Contains("scientist")) {
 		SetConfigValue("Scientist_Multipliers", paramatype, newnumber);
-		} else if (paramaclass.Contains("zombie") || paramaclass.Contains("murderer")) {
+		} else if (paramaclass.Contains("zombie") || paramaclass.Contains("murderer") || paramaclass.Contains("scarecrow")) {
 		SetConfigValue("Zombie_Multipliers", paramatype, newnumber);
 		} else if (paramaclass.Contains("player")) {
 		SetConfigValue("Player_Multipliers", paramatype, newnumber);
@@ -616,8 +711,20 @@ namespace Oxide.Plugins {
 		SetConfigValue("Horse_Multipliers", paramatype, newnumber);
 		} else if (paramaclass.Contains("stag")) {
 		SetConfigValue("Stag_Multipliers", paramatype, newnumber);
-		} else if (paramaclass.Contains("time")) {
-		SetConfigValue("Time_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("GlobalTime")) {
+		SetConfigValue("GlobalTime_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("PlayerTime")) {
+		SetConfigValue("PlayerTime_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("AnimalTime")) {
+		SetConfigValue("AnimalTime_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("NPCTime")) {
+		SetConfigValue("NPCTime_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("OtherTime")) {
+		SetConfigValue("OtherTime_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("HeliTime")) {
+		SetConfigValue("HeliTime_Multipliers", paramatype, newnumber);
+		} else if (paramaclass.Contains("BradleyTime")) {
+		SetConfigValue("BradleyTime_Multipliers", paramatype, newnumber);
 		} else if (paramaclass.Contains("wolf")) {
 		SetConfigValue("Wolf_Multipliers", paramatype, newnumber);
 		}
@@ -721,13 +828,17 @@ namespace Oxide.Plugins {
 			tempnumber = _Buildingmultipliers[dtype.IndexOf(paramatype)];
 		} else if (paramaclass.Contains("apc") || paramaclass.Contains("bradley")) {
 			tempnumber = _APCmultipliers[dtype.IndexOf(paramatype)];
-		} else if (paramaclass.Contains("boat") || paramaclass.Contains("rhib")) {
-			tempnumber = _Boatmultipliers[dtype.IndexOf(paramatype)];
 		} else if (paramaclass.Contains("heli")) {
 			tempnumber = _Helimultipliers[dtype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("balloon")) {
+			tempnumber = _Balloonmultipliers[dtype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("minicopter")) {
+			tempnumber = _Minicoptermultipliers[dtype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("samsite")) {
+			tempnumber = _SAMSitemultipliers[dtype.IndexOf(paramatype)];
 		} else if (paramaclass.Contains("npc") || paramaclass.Contains("scientist")) {
 			tempnumber = _NPCmultipliers[dtype.IndexOf(paramatype)];
-		} else if (paramaclass.Contains("zombie") || paramaclass.Contains("murderer")) {
+		} else if (paramaclass.Contains("zombie") || paramaclass.Contains("murderer") || (paramaclass.Contains("scarecrow") && !paramaclass.Contains("deployed"))) {
 			tempnumber = _Zombiemultipliers[dtype.IndexOf(paramatype)];
 		} else if (paramaclass.Contains("player")) {
 			tempnumber = _Playermultipliers[dtype.IndexOf(paramatype)];
@@ -741,8 +852,20 @@ namespace Oxide.Plugins {
 			tempnumber = _Horsemultipliers[dtype.IndexOf(paramatype)];
 		} else if (paramaclass.Contains("stag")) {
 			tempnumber = _Stagmultipliers[dtype.IndexOf(paramatype)];
-		} else if (paramaclass.Contains("time")) {
-			tempnumber = _Timemultipliers[ttype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("GlobalTime")) {
+			tempnumber = _GlobalTimemultipliers[ttype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("PlayerTime")) {
+			tempnumber = _PlayerTimemultipliers[ttype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("AnimalTime")) {
+			tempnumber = _AnimalTimemultipliers[ttype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("NPCTime")) {
+			tempnumber = _NPCTimemultipliers[ttype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("OtherTime")) {
+			tempnumber = _OtherTimemultipliers[ttype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("HeliTime")) {
+			tempnumber = _HeliTimemultipliers[ttype.IndexOf(paramatype)];
+		} else if (paramaclass.Contains("BradleyTime")) {
+			tempnumber = _BradleyTimemultipliers[ttype.IndexOf(paramatype)];
 		} else if (paramaclass.Contains("wolf")) {
 			tempnumber = _Wolfmultipliers[dtype.IndexOf(paramatype)];
 		} else if (paramaclass.Contains("bgrade")) {
@@ -764,49 +887,26 @@ namespace Oxide.Plugins {
 
   void setHitScale(HitInfo hitInfo, float[] _multipliers, float addlnmod) {
 
-	int   time      = 0;
-	float timemod   = 0.0F;
-
-	time = Convert.ToInt32(Math.Floor(TOD_Sky.Instance.Cycle.Hour));
-
-	// make sure this is in range
-	if (time > 23 || time < 0)
-		time = 0;
-
-	// Puts (time.ToString());
-	// get the time of day multiplier
-	timemod = _Timemultipliers[time];
-	if (timemod == null)
-		timemod = 1;
-	
-	// Puts (timemod.ToString());
 	//Puts ("addlnmod: " + addlnmod.ToString());
-	if (addlnmod == null)
-		addlnmod = 1;
 
 	// added logic to apply decay
 	for (var i = 0; i < DamageTypeMax; i++)
 	{
-		if (_multipliers[i] == null)
-			_multipliers[i] = 1;
-		
 		if (AllowDecay == true &&
 		   ((DamageType) i == Rust.DamageType.Decay || (DamageType) i == Rust.DamageType.Generic ) &&
-		   _multipliers[i] * timemod * addlnmod < 0.01F &&
+		   _multipliers[i] * addlnmod < 0.01F &&
 		   !(hitInfo.Initiator is BaseCombatEntity) &&
 			hitInfo?.Weapon?.GetItem()?.info?.displayName?.english == null)
 		{
 			if (_multipliers[i] == 0)
 				_multipliers[i] = 1;
-			if (timemod == 0)
-				timemod = 1;
 			if (addlnmod == 0)
 				addlnmod = 1;
 
-			hitInfo.damageTypes.Scale((DamageType) i, _multipliers[i] * timemod * addlnmod);
+			hitInfo.damageTypes.Scale((DamageType) i, _multipliers[i] * addlnmod);
 		}
 		else
-			hitInfo.damageTypes.Scale((DamageType) i, _multipliers[i] * timemod * addlnmod);
+			hitInfo.damageTypes.Scale((DamageType) i, _multipliers[i] * addlnmod);
 		// Puts (_multipliers[i].ToString());
 	}
 
@@ -814,140 +914,224 @@ namespace Oxide.Plugins {
 
   void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo) {
 
-	float modifier = 1.0F;
-	// debugging
-	//PrintWarning("0 " + entity.ShortPrefabName.Replace("_","."));
+	float modifier       = 1.0F;
+	int   Time           = 0;
+	BuildingBlock buildingBlock = null;
 
 	if (entity == null || hitInfo == null)
 		{
 			return; // Nothing to process
 		}
-	else if(entity is LootContainer && entity.ShortPrefabName.Contains("barrel"))  // barrel
+
+	try
+		{
+			if (EntityModifier.ContainsKey(entity.ShortPrefabName))
+				try
+				{
+					EntityModifier.TryGetValue(entity.ShortPrefabName, out modifier);
+				}
+				catch
+				{
+					modifier  = 1.0F;
+				}
+		}
+	catch
+		{
+			modifier = 1.0F;
+		}
+
+	Time = Convert.ToInt32(Math.Floor(TOD_Sky.Instance.Cycle.Hour));
+
+	// make sure the time is in range
+	if (Time > 24 || Time < 0)
+		Time = 0;
+
+	// Apply the Global Time Mod
+	modifier =  modifier * _GlobalTimemultipliers[Time];
+
+	// debugging
+	//	PrintWarning("0 " + entity.ShortPrefabName.Replace("_","."));
+	//	PrintWarning("0.1 " + entity.ShortPrefabName);
+
+	if(entity is LootContainer && entity.ShortPrefabName.Contains("barrel"))  // barrel
 	{
-		modifier = ModifyBarrel;
+		modifier = modifier * ModifyBarrel * _OtherTimemultipliers[Time];
 
 		setHitScale(hitInfo, _Onemultipliers,modifier);
 	}
-	else if (entity is NPCMurderer) // Murderer (treated the same as zombies)
+	else if (entity is NPCMurderer || (entity.ShortPrefabName.Contains("scarecrow") && !entity.ShortPrefabName.Contains("deployed"))) // Scarecrows and Murderer (treated the same as zombies)
 		{
-			setHitScale(hitInfo, _Zombiemultipliers,1.0F);
+
+			// Apply the NPC Time Mod
+			modifier =  modifier * _NPCTimemultipliers[Time];
+			setHitScale(hitInfo, _Zombiemultipliers,modifier);
 			return;
 		}
-	else if (entity is NPCPlayerApex || entity is NPCPlayer) // BotSpawn type Scientists, etc.
+	else if (entity.ShortPrefabName.Contains("hotairballoon"))
+	{
+		setHitScale(hitInfo, _Balloonmultipliers,modifier);
+		return;
+	}
+	else if (entity.ShortPrefabName.Contains("minicopter"))
+	{
+		setHitScale(hitInfo, _Minicoptermultipliers,modifier);
+		return;
+	}
+	else if (entity.ShortPrefabName.Contains("sam_site"))
+	{
+		setHitScale(hitInfo, _SAMSitemultipliers,modifier);
+		return;
+	}
+	else if (entity.ShortPrefabName.Contains("assets/rust.ai/agents/"))
 		{
-			setHitScale(hitInfo, _NPCmultipliers,1.0F);
-			return;
-		}
-	else if (entity as BradleyAPC != null) // APC
-		{
-			setHitScale(hitInfo, _APCmultipliers,1.0F);
-			return;
-		}
-	else if (entity as BaseHelicopter != null) // Heli
-		{
-			setHitScale(hitInfo, _Helimultipliers,1.0F);
-			return;
-		}
-	else if (entity as BaseNpc != null)
-		{
+			// Apply the Animal Time Mod
+			modifier =  modifier * _AnimalTimemultipliers[Time];
 			if (entity.ShortPrefabName == "zombie") // Zombie
 				{
-				setHitScale(hitInfo, _Zombiemultipliers,1.0F);
+				setHitScale(hitInfo, _Zombiemultipliers,modifier);
 				}
 			else if (entity.ShortPrefabName == "bear") // Bear
 				{
-				setHitScale(hitInfo, _Bearmultipliers,1.0F);
+				setHitScale(hitInfo, _Bearmultipliers,modifier);
 				}
 			else if (entity.ShortPrefabName == "boar") // Boar
 				{
-				setHitScale(hitInfo, _Boarmultipliers,1.0F);
+				setHitScale(hitInfo, _Boarmultipliers,modifier);
 				}
 			else if (entity.ShortPrefabName == "chicken") // Chicken
 				{
-				setHitScale(hitInfo, _Chickenmultipliers,1.0F);
+				setHitScale(hitInfo, _Chickenmultipliers,modifier);
 				}
 			else if (entity.ShortPrefabName == "horse") // Horse
 				{
-				setHitScale(hitInfo, _Horsemultipliers,1.0F);
+				setHitScale(hitInfo, _Horsemultipliers,modifier);
 				}
 			else if (entity.ShortPrefabName == "stag") // Stag
 				{
-				setHitScale(hitInfo, _Stagmultipliers,1.0F);
+				setHitScale(hitInfo, _Stagmultipliers,modifier);
 				}
 			else if (entity.ShortPrefabName == "wolf") // Wolf
 				{
-				setHitScale(hitInfo, _Wolfmultipliers,1.0F);
+				setHitScale(hitInfo, _Wolfmultipliers,modifier);
 				}
 			else // Animal not found
 				{
 				Puts ("Animal not found in Damage Control: " + entity.ShortPrefabName + " using Bear");
-				setHitScale(hitInfo, _Bearmultipliers,1.0F);
+				setHitScale(hitInfo, _Bearmultipliers,modifier);
 				}
 			return;
 		}
-	else if (entity as BasePlayer != null)
+	else if (entity is BaseNpc || entity is NPCPlayerApex || entity is NPCPlayer || entity is Scientist || (entity is BasePlayer && (entity as BasePlayer).IsNpc)) // BotSpawn type Scientists, etc.
 		{
-			setHitScale(hitInfo, _Playermultipliers,1.0F);
+			// Apply the NPC Time Mod
+			modifier =  modifier * _NPCTimemultipliers[Time];
+			setHitScale(hitInfo, _NPCmultipliers,modifier);
 			return;
 		}
-	// special overrides for building
-	else if (entity is BuildingBlock || entity is Door || entity.ShortPrefabName.Contains("external") || entity.ShortPrefabName.Contains("hatch"))
-	{
-		//Puts ("BB: " + entity.ShortPrefabName);
-		if (entity.ShortPrefabName.Contains("foundation"))
-			modifier = ModifyFoundation;
-		else if (entity.ShortPrefabName.Contains("external"))
-			modifier = ModifyHighExternal;
-		else if (entity.ShortPrefabName.Contains("wall") && !(entity is Door) && !(entity.ShortPrefabName.Contains("external")))
-			modifier = ModifyWall;
-		else if (entity.ShortPrefabName.Contains("floor") && !entity.ShortPrefabName.Contains("hatch"))
-			modifier = ModifyFloor;
-		else if (entity.ShortPrefabName.Contains("roof"))
-			modifier = ModifyRoof;
-		else if ((entity is Door || entity.ShortPrefabName.Contains("hatch")) && !entity.ShortPrefabName.Contains("external"))
-			modifier = ModifyDoor;
-		else if (entity.ShortPrefabName.Contains("stairs"))
-			modifier = ModifyStairs;
-		else if (entity is BuildingBlock)
-			modifier = ModifyOther;
-		else if (deployable_list.Contains(entity.ShortPrefabName.Replace("_",".").ToLower()))  // this deal with high walls etc.
-			modifier = ModifyDeployed;
-
-		if (entity is BuildingBlock)
+	else if (entity is BradleyAPC) // APC
 		{
-			BuildingBlock buildingBlock = entity as BuildingBlock;
-
-			if (buildingBlock.grade == BuildingGrade.Enum.Twigs)
-				modifier = _TwigsMultiplier * modifier;
-			else if (buildingBlock.grade == BuildingGrade.Enum.Wood )
-				modifier = _WoodMultiplier * modifier;
-			else if (buildingBlock.grade == BuildingGrade.Enum.Stone )
-				modifier = _StoneMultiplier * modifier;
-			else if (buildingBlock.grade == BuildingGrade.Enum.Metal )
-				modifier = _MetalMultiplier * modifier;
-			else if (buildingBlock.grade == BuildingGrade.Enum.TopTier )
-				modifier = _TopTierMultiplier * modifier;
+			// Apply the Bradley Time Mod
+			modifier =  modifier * _BradleyTimemultipliers[Time];
+			setHitScale(hitInfo, _APCmultipliers,modifier);
+			return;
 		}
-		setHitScale(hitInfo, _Buildingmultipliers, modifier);
-		//Puts("Building: " + modifier.ToString());
+	else if (entity is BaseHelicopter) // Heli
+		{
+			// Apply the Heli Time Mod
+			modifier =  modifier * _HeliTimemultipliers[Time];
+			setHitScale(hitInfo, _Helimultipliers,modifier);
+			return;
+		}
+	else if (entity is BasePlayer)
+	{
+		// Apply the Player Time Mod
+		modifier =  modifier * _PlayerTimemultipliers[Time];
+		setHitScale(hitInfo, _Playermultipliers,modifier);
+		return;
 	}
 	else if (entity.ShortPrefabName.Contains("cupboard.tool.deployed")) // TC
 	{
-		modifier = ModifyTC;
+		// Apply the Other Time Mod
+		modifier = modifier * ModifyTC * _OtherTimemultipliers[Time];
 		setHitScale(hitInfo, _Buildingmultipliers,modifier);
 	}
-	else if (deployable_list.Contains(entity.ShortPrefabName.Replace("_",".").ToLower()) || entity.ShortPrefabName == "woodbox_deployed") // Deployed
+	// special overrides for building
+	else if (entity is BuildingBlock || entity is Door || entity.ShortPrefabName.Contains("external") || entity.ShortPrefabName.Contains("hatch"))
 	{
-		//Puts ("dep: " + entity.ShortPrefabName);
-		modifier = ModifyDeployed;
-		setHitScale(hitInfo, _Buildingmultipliers,modifier);
+		// Apply the Other Time Mod
+		modifier =  modifier * _OtherTimemultipliers[Time];
+
+		if (entity.ShortPrefabName.Contains("foundation"))
+			modifier = modifier * ModifyFoundation;
+		else if (entity.ShortPrefabName.Contains("external"))
+			modifier = modifier * ModifyHighExternal;
+		else if (entity.ShortPrefabName.Contains("wall") && !(entity is Door) && !(entity.ShortPrefabName.Contains("external")))
+			modifier = modifier * ModifyWall;
+		else if (entity.ShortPrefabName.Contains("floor") && !entity.ShortPrefabName.Contains("hatch"))
+			modifier = modifier * ModifyFloor;
+		else if (entity.ShortPrefabName.Contains("roof"))
+			modifier = modifier * ModifyRoof;
+		else if ((entity is Door || entity.ShortPrefabName.Contains("hatch")) && !entity.ShortPrefabName.Contains("external"))
+			modifier = modifier * ModifyDoor;
+		else if (entity.ShortPrefabName.Contains("stairs"))
+			modifier = modifier * ModifyStairs;
+		else if (entity is BuildingBlock)
+			modifier = modifier * ModifyOther;
+		else if (deployable_list.Contains(entity.ShortPrefabName.Replace("_",".").ToLower()))  // this deal with high walls etc.
+			modifier = modifier * ModifyDeployed;
+			
+		if (entity is BuildingBlock)
+		{
+			buildingBlock = entity as BuildingBlock;
+
+			if (modifier == 0 && Heli_bypass && ((hitInfo.Initiator != null && hitInfo.Initiator is BaseHelicopter) ||
+				(hitInfo.WeaponPrefab != null && hitInfo.WeaponPrefab.ShortPrefabName.StartsWith("rocket_heli"))))
+			{
+				if (buildingBlock.grade == BuildingGrade.Enum.Twigs)
+					modifier = _TwigsMultiplier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.Wood )
+					modifier = _WoodMultiplier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.Stone )
+					modifier = _StoneMultiplier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.Metal )
+					modifier = _MetalMultiplier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.TopTier )
+					modifier = _TopTierMultiplier;
+			}			
+			else
+			{
+				if (buildingBlock.grade == BuildingGrade.Enum.Twigs)
+					modifier = _TwigsMultiplier * modifier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.Wood )
+					modifier = _WoodMultiplier * modifier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.Stone )
+					modifier = _StoneMultiplier * modifier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.Metal )
+					modifier = _MetalMultiplier * modifier;
+				else if (buildingBlock.grade == BuildingGrade.Enum.TopTier )
+					modifier = _TopTierMultiplier * modifier;
+			}
+		}
+
+		// bypasses, warning these could be used to grief bases in PVE
+		if (modifier == 0 || !(entity is BuildingBlock))
+			setHitScale(hitInfo, _Buildingmultipliers, modifier);
+		else if (Heli_bypass && ((hitInfo.Initiator != null && hitInfo.Initiator is BaseHelicopter) ||
+				(hitInfo.WeaponPrefab != null && hitInfo.WeaponPrefab.ShortPrefabName.StartsWith("rocket_heli"))))
+			setHitScale(hitInfo, _Onemultipliers, modifier);
+		else
+			setHitScale(hitInfo, _Buildingmultipliers, modifier);
 	}
-	else if (entity.ShortPrefabName == "rhib" || entity.ShortPrefabName == "rowboat")  // Boats
+	else if (deployable_list.Contains(entity.ShortPrefabName.Replace("_",".").ToLower())) // Deployed
 	{
-		setHitScale(hitInfo, _Boatmultipliers,1.0F);
+		// Apply the Other Time Mod
+		modifier = modifier * ModifyDeployed * _OtherTimemultipliers[Time];
+
+		setHitScale(hitInfo, _Buildingmultipliers,modifier);
 	}
 
-   return; // Nothing to process
+	//Puts("modifier: " + modifier);
+    return; // any processing is completed
   }
 
   bool IsAllowed(IPlayer iplayer) {
