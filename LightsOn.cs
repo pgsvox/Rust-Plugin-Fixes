@@ -35,6 +35,7 @@ namespace Oxide.Plugins
 		const string bbq_name               = "bbq";
 		const string campfire_name          = "campfire";
 		const string ceilinglight_name      = "ceilinglight";
+		const string chineselantern_name    = "chineselantern";
 		const string cursedcauldron_name    = "cursedcauldron";
 		const string fireplace_name         = "fireplace";
 		const string fogmachine_name        = "fogmachine";
@@ -333,6 +334,8 @@ namespace Oxide.Plugins
 				return true;
 			else if (campfire_name.Contains(prefabName))
 				return true;
+			else if (chineselantern_name.Contains(prefabName))
+				return true;
 			else if (fireplace_name.Contains(prefabName))
 				return true;
 			else if (hobobarrel_name.Contains(prefabName))
@@ -363,6 +366,8 @@ namespace Oxide.Plugins
 				return true;
 			else if (tunalight_name.Contains(prefabName))
 				return true;
+			else if (chineselantern_name.Contains(prefabName))
+				return true;
 			//else if (jackolanternangry_name.Contains(prefabName))
 			//	return true;
 			//else if (jackolanternhappy_name.Contains(prefabName))
@@ -390,6 +395,8 @@ namespace Oxide.Plugins
 			else if (jackolanternangry_name.Contains(prefabName))
 				return true;
 			else if (jackolanternhappy_name.Contains(prefabName))
+				return true;
+			else if (chineselantern_name.Contains(prefabName))
 				return true;
 			else if (largecandleset_name.Contains(prefabName))
 				return true;
@@ -491,6 +498,7 @@ namespace Oxide.Plugins
 				case "jackolantern.angry":	return config.Lanterns;
 				case "jackolantern.happy":	return config.Lanterns;
 				case "lantern":				return config.Lanterns;
+				case "chineselantern":		return config.Lanterns;
 				case "largecandleset":		return config.Candles;
 				case "refinery_small":		return config.Refineries;
 				case "searchlight":			return config.SearchLights;
@@ -604,7 +612,8 @@ namespace Oxide.Plugins
 					    skullfirepit_name.Contains(prefabName) ||
 					    hobobarrel_name.Contains(prefabName) ||
 					    smallrefinery_name.Contains(prefabName) ||
-					    refinerysmall_name.Contains(prefabName)
+					    refinerysmall_name.Contains(prefabName) ||
+					    chineselantern_name.Contains(prefabName)
 						))
  					{
 						oven.SetFlag(BaseEntity.Flags.On, state);
@@ -617,6 +626,7 @@ namespace Oxide.Plugins
 						if ((config.Furnaces    && (furnace_name.Contains(oven_name) ||
 													 furnace_large_name.Contains(oven_name))) ||
 							 (config.Lanterns    && (lantern_name.Contains(oven_name) ||
+													 chineselantern_name.Contains(oven_name) ||
 													 tunalight_name.Contains(oven_name) ||
 													 jackolanternangry_name.Contains(oven_name) ||
 													 jackolanternhappy_name.Contains(oven_name))) ||
