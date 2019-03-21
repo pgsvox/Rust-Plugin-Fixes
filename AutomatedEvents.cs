@@ -43,8 +43,6 @@ namespace Oxide.Plugins
 			switch (arg.Args[0].ToLower())
 			{
 				case "brad":
-					RunEvent(EventType.Bradley);
-					break;
 				case "bradley":
 					RunEvent(EventType.Bradley);
 					break;
@@ -52,24 +50,21 @@ namespace Oxide.Plugins
 					RunEvent(EventType.CargoPlane);
 					break;
 				case "ship":
-					RunEvent(EventType.CargoShip);
-					break;
 				case "cargo":
 					RunEvent(EventType.CargoShip);
 					break;
 				case "ch47":
-					RunEvent(EventType.Chinook);
-					break;
 				case "chinook":
 					RunEvent(EventType.Chinook);
 					break;
 				case "heli":
+				case "helicopter":
+				case "copter":
 					RunEvent(EventType.Helicopter);
 					break;
 				case "xmas":
-					RunEvent(EventType.XMasEvent);
-					break;
 				case "chris":
+				case "christmas":
 					RunEvent(EventType.XMasEvent);
 					break;
 				default:
@@ -107,7 +102,6 @@ namespace Oxide.Plugins
                     break;
                 case EventType.CargoShip:
                     prefabName = "assets/content/vehicles/boats/cargoship/cargoshiptest.prefab";
-					y_extra_offset = 0.0f;
 					Puts("Spawning CargoShip");
                     break;
                 case EventType.Chinook:
@@ -123,6 +117,7 @@ namespace Oxide.Plugins
                 case EventType.XMasEvent:
                     rust.RunServerCommand("xmas.refill");
 					Puts("Christmas is occuring");
+					return;
                     break;
             }
             if (!string.IsNullOrEmpty(prefabName))
@@ -134,22 +129,18 @@ namespace Oxide.Plugins
 				}
 				else
 				{
-					float x = TerrainMeta.Size.x;
-					float mapScaleDistance = ConVar.Server.worldsize;
-					//Puts(mapScaleDistance.ToString());
-					Vector3 vector3_1 = Vector3Ex.Range(-1.0f, 1.0f);
-					vector3_1.Normalize();
-					vector3_1.x = UnityEngine.Random.Range(0.8f, 0.99f) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f);
-					vector3_1.z = UnityEngine.Random.Range(0.8f, 0.99f) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f);
+					//Puts(ConVar.Server.worldsize.ToString());
+					float ran_min =  0.45f;
+					float ran_max =  0.65f;
+					Vector3 vector3_1 = new Vector3();
+					vector3_1.x = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * ConVar.Server.worldsize;
+					vector3_1.z = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * ConVar.Server.worldsize;
+					vector3_1.y = 0.0f;
+					vector3_1.y = TerrainMeta.WaterMap.GetHeight(vector3_1) + y_extra_offset;
 					//Puts("X1: " + vector3_1.x.ToString());
 					//Puts("Z1: " + vector3_1.z.ToString());
-					vector3_1.y = 0.0f;
-					Vector3 vector3_2 = vector3_1 * mapScaleDistance;
-					vector3_2.y = vector3_2.y + y_extra_offset;
-					//Puts("X2: " + vector3_2.x.ToString());
-					//Puts("Z2: " + vector3_2.z.ToString());
-					//Puts("Y2: " + vector3_2.y.ToString());
-					var entity = GameManager.server.CreateEntity(prefabName, vector3_2, new Quaternion(), true);
+					//Puts("Y1: " + vector3_1.y.ToString());
+					var entity = GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
 					entity.Spawn();
 				}
             }
