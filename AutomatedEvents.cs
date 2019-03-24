@@ -88,7 +88,24 @@ namespace Oxide.Plugins
         {
             string prefabName = string.Empty;
 			float  x_extra_offset = 0.0f;
-			float  y_extra_offset = 0.0f;			
+			float  y_extra_offset = 0.0f;
+
+			//Puts(ConVar.Server.worldsize.ToString());
+			float ran_min =  0.65f;
+			float ran_max =  0.80f;
+			Vector3 vector3_1 = new Vector3();
+			vector3_1.x = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
+			vector3_1.z = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
+			vector3_1.y = 0.0f;
+			//Puts("water level: " + TerrainMeta.WaterMap.GetHeight(vector3_1).ToString());
+			vector3_1.y = TerrainMeta.WaterMap.GetHeight(vector3_1);
+			if (vector3_1.y < 0)  // make sure its not messed up
+				vector3_1.y = 300;
+			//Puts("X1: " + vector3_1.x.ToString());
+			//Puts("Z1: " + vector3_1.z.ToString());
+			//Puts("Y1: " + vector3_1.y.ToString());
+
+
             switch (type)
             {
                 case EventType.Bradley:
@@ -96,6 +113,8 @@ namespace Oxide.Plugins
 	                {    
 						prefabName = "assets/prefabs/npc/m2bradley/bradleyapc.prefab";
 						Puts("Spawning Bradley");
+						var entity = (BradleyAPC)GameManager.server.CreateEntity(prefabName, new Vector3(), new Quaternion(), true);
+						entity.Spawn();
 					}
 					else
 					{
@@ -106,55 +125,41 @@ namespace Oxide.Plugins
                 case EventType.CargoPlane:
                     prefabName = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
 					y_extra_offset = 300.0f;
+					vector3_1.y  = vector3_1.y + y_extra_offset;
 					Puts("Spawning Cargo Plane");
+					var Plane = (CargoPlane)GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
+					Plane.Spawn();
                     break;
                 case EventType.CargoShip:
                     prefabName = "assets/content/vehicles/boats/cargoship/cargoshiptest.prefab";
 					x_extra_offset = ConVar.Server.worldsize * 0.125f;
+					vector3_1.x = vector3_1.x + x_extra_offset;
+					vector3_1.z = vector3_1.z + x_extra_offset;
 					Puts("Spawning CargoShip");
+					var Ship = (CargoShip)GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
+					Ship.Spawn();
                     break;
                 case EventType.Chinook:
                     prefabName = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab"; // "assets/prefabs/npc/ch47/ch47.entity.prefab";
 					y_extra_offset = 300.0f;
+					vector3_1.y  = vector3_1.y + y_extra_offset;
 					Puts("Spawning Chinook");
+					var Chin = (CH47HelicopterAIController)GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
+					Chin.Spawn();
                     break;
                 case EventType.Helicopter:
                     prefabName = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
 					y_extra_offset = 300.0f;
+					vector3_1.y  = vector3_1.y + y_extra_offset;
 					Puts("Spawning Helicopter");
+					var Heli = (BaseHelicopter)GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
+					Heli.Spawn();
                     break;
                 case EventType.XMasEvent:
                     rust.RunServerCommand("xmas.refill");
 					Puts("Christmas is occuring");
 					return;
                     break;
-            }
-            if (!string.IsNullOrEmpty(prefabName))
-            {
-				if (type == EventType.Bradley)
-				{
-					var entity = GameManager.server.CreateEntity(prefabName, new Vector3(), new Quaternion(), true);
-					entity.Spawn();
-				}
-				else
-				{
-					//Puts(ConVar.Server.worldsize.ToString());
-					float ran_min =  0.65f;
-					float ran_max =  0.80f;
-					Vector3 vector3_1 = new Vector3();
-					vector3_1.x = x_extra_offset + UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
-					vector3_1.z = x_extra_offset + UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
-					vector3_1.y = 0.0f;
-					//Puts("water level: " + TerrainMeta.WaterMap.GetHeight(vector3_1).ToString());
-					vector3_1.y = TerrainMeta.WaterMap.GetHeight(vector3_1) + y_extra_offset;
-					if (vector3_1.y < 0)  // make sure its not messed up
-						vector3_1.y = y_extra_offset;
-					//Puts("X1: " + vector3_1.x.ToString());
-					//Puts("Z1: " + vector3_1.z.ToString());
-					//Puts("Y1: " + vector3_1.y.ToString());
-					var entity = GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
-					entity.Spawn();
-				}
             }
             StartEventTimer(type);
         }
