@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AutomatedEvents", "k1lly0u", "0.1.2", ResourceId = 0)]
+    [Info("AutomatedEvents", "k1lly0u", "0.1.3", ResourceId = 0)]
     class AutomatedEvents : RustPlugin
     {
         #region Fields
@@ -47,10 +47,12 @@ namespace Oxide.Plugins
 					RunEvent(EventType.Bradley);
 					break;
 				case "plane":
+				case "cargoplane":
 					RunEvent(EventType.CargoPlane);
 					break;
 				case "ship":
 				case "cargo":
+				case "cargoship":
 					RunEvent(EventType.CargoShip);
 					break;
 				case "ch47":
@@ -77,13 +79,16 @@ namespace Oxide.Plugins
         void StartEventTimer(EventType type)
         {
             var config = configData.Events[type];
-            if (!config.Enabled) return;
-            eventTimers[type] = timer.In(UnityEngine.Random.Range(config.MinimumTimeBetween, config.MaximumTimeBetween) * 60, () => RunEvent(type));
+            if (!config.Enabled) 
+				return;
+			else
+				eventTimers[type] = timer.In(UnityEngine.Random.Range(config.MinimumTimeBetween, config.MaximumTimeBetween) * 60, () => RunEvent(type));
         }
         void RunEvent(EventType type)
         {
             string prefabName = string.Empty;
-			float  y_extra_offset = 0.0f;
+			float  x_extra_offset = 0.0f;
+			float  y_extra_offset = 0.0f;			
             switch (type)
             {
                 case EventType.Bradley:
@@ -93,25 +98,29 @@ namespace Oxide.Plugins
 						Puts("Spawning Bradley");
 					}
 					else
+					{
 						Puts(" Bradley already out");
+						return;
+					}
                     break;
                 case EventType.CargoPlane:
                     prefabName = "assets/prefabs/npc/cargo plane/cargo_plane.prefab";
-					y_extra_offset = 200.0f;
+					y_extra_offset = 300.0f;
 					Puts("Spawning Cargo Plane");
                     break;
                 case EventType.CargoShip:
                     prefabName = "assets/content/vehicles/boats/cargoship/cargoshiptest.prefab";
+					x_extra_offset = ConVar.Server.worldsize * 0.125f;
 					Puts("Spawning CargoShip");
                     break;
                 case EventType.Chinook:
-                    prefabName = "assets/prefabs/npc/ch47/ch47.entity.prefab";
-					y_extra_offset = 200.0f;
+                    prefabName = "assets/prefabs/npc/ch47/ch47scientists.entity.prefab"; // "assets/prefabs/npc/ch47/ch47.entity.prefab";
+					y_extra_offset = 300.0f;
 					Puts("Spawning Chinook");
                     break;
                 case EventType.Helicopter:
                     prefabName = "assets/prefabs/npc/patrol helicopter/patrolhelicopter.prefab";
-					y_extra_offset = 200.0f;
+					y_extra_offset = 300.0f;
 					Puts("Spawning Helicopter");
                     break;
                 case EventType.XMasEvent:
@@ -122,7 +131,7 @@ namespace Oxide.Plugins
             }
             if (!string.IsNullOrEmpty(prefabName))
             {
-				if (prefabName == "assets/prefabs/npc/m2bradley/bradleyapc.prefab")
+				if (type == EventType.Bradley)
 				{
 					var entity = GameManager.server.CreateEntity(prefabName, new Vector3(), new Quaternion(), true);
 					entity.Spawn();
@@ -130,16 +139,19 @@ namespace Oxide.Plugins
 				else
 				{
 					//Puts(ConVar.Server.worldsize.ToString());
-					float ran_min =  0.45f;
-					float ran_max =  0.65f;
+					float ran_min =  0.65f;
+					float ran_max =  0.80f;
 					Vector3 vector3_1 = new Vector3();
-					vector3_1.x = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * ConVar.Server.worldsize;
-					vector3_1.z = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * ConVar.Server.worldsize;
+					vector3_1.x = x_extra_offset + UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
+					vector3_1.z = x_extra_offset + UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
 					vector3_1.y = 0.0f;
+					Puts("water level: " + TerrainMeta.WaterMap.GetHeight(vector3_1).ToString());
 					vector3_1.y = TerrainMeta.WaterMap.GetHeight(vector3_1) + y_extra_offset;
-					//Puts("X1: " + vector3_1.x.ToString());
-					//Puts("Z1: " + vector3_1.z.ToString());
-					//Puts("Y1: " + vector3_1.y.ToString());
+					if (vector3_1.y < 0)  // make sure its not messed up
+						vector3_1.y = y_extra_offset;
+					Puts("X1: " + vector3_1.x.ToString());
+					Puts("Z1: " + vector3_1.z.ToString());
+					Puts("Y1: " + vector3_1.y.ToString());
 					var entity = GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
 					entity.Spawn();
 				}
