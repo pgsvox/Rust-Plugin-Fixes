@@ -145,13 +145,13 @@ namespace Oxide.Plugins
 					vector3_1.x = x_extra_offset + UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
 					vector3_1.z = x_extra_offset + UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
 					vector3_1.y = 0.0f;
-					Puts("water level: " + TerrainMeta.WaterMap.GetHeight(vector3_1).ToString());
+					//Puts("water level: " + TerrainMeta.WaterMap.GetHeight(vector3_1).ToString());
 					vector3_1.y = TerrainMeta.WaterMap.GetHeight(vector3_1) + y_extra_offset;
 					if (vector3_1.y < 0)  // make sure its not messed up
 						vector3_1.y = y_extra_offset;
-					Puts("X1: " + vector3_1.x.ToString());
-					Puts("Z1: " + vector3_1.z.ToString());
-					Puts("Y1: " + vector3_1.y.ToString());
+					//Puts("X1: " + vector3_1.x.ToString());
+					//Puts("Z1: " + vector3_1.z.ToString());
+					//Puts("Y1: " + vector3_1.y.ToString());
 					var entity = GameManager.server.CreateEntity(prefabName, vector3_1, new Quaternion(), true);
 					entity.Spawn();
 				}
