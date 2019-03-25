@@ -92,7 +92,7 @@ namespace Oxide.Plugins
 
 			//Puts(ConVar.Server.worldsize.ToString());
 			float ran_min =  0.65f;
-			float ran_max =  0.80f;
+			float ran_max =  0.75f;
 			Vector3 vector3_1 = new Vector3();
 			vector3_1.x = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
 			vector3_1.z = UnityEngine.Random.Range(ran_min, ran_max) * ((Math.Round(UnityEngine.Random.value)==0)?-1.0f:1.0f) * (ConVar.Server.worldsize/2);
