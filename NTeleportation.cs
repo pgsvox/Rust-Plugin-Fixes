@@ -20,7 +20,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "RFC1920", "1.0.51", ResourceId = 1832)]
+    [Info("NTeleportation", "RFC1920", "1.0.52", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
         private static readonly Vector3 Up = up;
@@ -35,6 +35,7 @@ namespace Oxide.Plugins
         private const string PermRadiusHome = "nteleportation.radiushome";
         private const string PermTp = "nteleportation.tp";
         private const string PermTpB = "nteleportation.tpb";
+        private const string PermTpT = "nteleportation.tpt";
         private const string PermTpConsole = "nteleportation.tpconsole";
         private const string PermTpHome = "nteleportation.tphome";
         private const string PermTpTown = "nteleportation.tptown";
@@ -100,6 +101,9 @@ namespace Oxide.Plugins
             public bool InterruptTPOnCargo { get; set; }
             public bool InterruptTPOnLift { get; set; }
             public bool InterruptTPOnMonument { get; set; }
+            public float CaveDistanceSmall { get; set; }
+            public float CaveDistanceMedium { get; set; }
+            public float CaveDistanceLarge { get; set; }
             public float DefaultMonumentSize { get; set; }
             public float MinimumTemp { get; set; }
             public float MaximumTemp { get; set; }
@@ -237,6 +241,9 @@ namespace Oxide.Plugins
                     InterruptTPOnCargo = true,
                     InterruptTPOnLift = true,
                     InterruptTPOnMonument = false,
+                    CaveDistanceSmall = 40f,
+                    CaveDistanceMedium = 60f,
+                    CaveDistanceLarge = 100f,
                     DefaultMonumentSize = 50f,
                     BypassCMD = "pay",
                     UseEconomics = false,
@@ -397,6 +404,7 @@ namespace Oxide.Plugins
                 {"TPBlockedItem", "You can't teleport while carrying: {0}!"},
                 {"TooCloseToMon", "You can't teleport so close to the {0}!"},
                 {"TooCloseToCave", "You can't teleport so close to a cave!"},
+                {"HomeTooCloseToCave", "You can't set home so close to a cave!"},
                 {"TownTP", "You teleported to town!"},
                 {"TownTPNotSet", "Town is currently not set!"},
                 {"TownTPDisabled", "Town is currently not enabled!"},
@@ -674,6 +682,14 @@ namespace Oxide.Plugins
                     })
                 },
                 {
+                    "SyntaxCommandTPT", string.Join(NewLine, new[]
+                    {
+                        "A Syntax Error Occurred!",
+                        "You can only use the /tpt command as follows:",
+                        "/tpt \"player name\" - Teleports you to a team or clan member."
+                    })
+                },
+                {
                     "SyntaxConsoleCommandToPlayer", string.Join(NewLine, new[]
                     {
                         "A Syntax Error Occurred!",
@@ -726,9 +742,25 @@ namespace Oxide.Plugins
                     configData.Home.UsableIntoBuildingBlocked = true;
                     configData.TPR.UsableIntoBuildingBlocked = true;
                 }
+                if (configData.Settings.MaximumTemp < 1)
+                {
+                    configData.Settings.MaximumTemp = 40f;
+                }
                 if (configData.Settings.DefaultMonumentSize < 1)
                 {
                     configData.Settings.DefaultMonumentSize = 50f;
+                }
+                if (configData.Settings.CaveDistanceSmall < 1)
+                {
+                    configData.Settings.CaveDistanceSmall = 40f;
+                }
+                if (configData.Settings.CaveDistanceMedium < 1)
+                {
+                    configData.Settings.CaveDistanceMedium = 60f;
+                }
+                if (configData.Settings.CaveDistanceLarge < 1)
+                {
+                    configData.Settings.CaveDistanceLarge = 100f;
                 }
                 configData.Version = Version;
                 Config.WriteObject(configData, true);
@@ -756,6 +788,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(PermTpHome, this);
             permission.RegisterPermission(PermTpTown, this);
             permission.RegisterPermission(PermTpN, this);
+            permission.RegisterPermission(PermTpT, this);
             permission.RegisterPermission(PermTpL, this);
             permission.RegisterPermission(PermTpRemove, this);
             permission.RegisterPermission(PermTpSave, this);
@@ -939,14 +972,22 @@ namespace Oxide.Plugins
                 string name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
                 if(monPos.ContainsKey(name)) continue;
                 if(cavePos.ContainsKey(name)) name = name + RandomString();
-
+#if DEBUG
+                Puts($"Found {name}");
+#endif
                 var width = monument.Bounds.extents;
                 if(monument.name.Contains("cave"))
                 {
+#if DEBUG
+                    Puts("  Adding to cave list");
+#endif
                     cavePos.Add(name, monument.transform.position);
                 }
                 else
                 {
+#if DEBUG
+//                    Puts("  Adding to monument list");
+#endif
                     if(width.z < 1)
                     {
                         width.z = configData.Settings.DefaultMonumentSize;
@@ -960,6 +1001,56 @@ namespace Oxide.Plugins
             monSize.OrderBy(x => x.Key);
             cavePos.OrderBy(x => x.Key);
         }
+        [ChatCommand("tpt")]
+        private void cmdChatTeleportTeam(BasePlayer player, string command, string[] args)
+        {
+            if (!IsAllowedMsg(player, PermTpT))
+				return;
+
+			if (args.Length < 1 || string.IsNullOrEmpty(args[0]))
+			{
+				PrintMsgL(player, "SyntaxCommandTPT");
+				return;
+			}
+			else
+			{
+				BasePlayer target = null;
+				string PlayerClan = null;
+				string TargetClan = null;
+
+				target = FindPlayersSingle(args[0], player);
+                if (target == null)
+					return;
+                else if (target == player)
+                {
+                    PrintMsgL(player, "CantTeleportToSelf");
+                    return;
+                }
+
+				PlayerClan = Clans?.Call<string> ("GetClanOf", player);
+				TargetClan = Clans?.Call<string> ("GetClanOf", target);
+
+				if ((string.IsNullOrEmpty(PlayerClan) ||
+					 string.IsNullOrEmpty(TargetClan) ||
+					 PlayerClan != TargetClan) &&
+					(player.currentTeam == 0 ||
+					 target.currentTeam == 0 ||
+					 player.currentTeam != target.currentTeam))
+				{
+					PrintMsgL(player, "NotValidTPT");
+					return;
+				}
+				else
+				{
+					// call "tpr"
+			        cmdChatTeleportRequest(player, "notpa", args);
+
+					// call "tpa"
+					string[] x = null;
+					cmdChatTeleportAccept(target, "notpa", x);
+				}
+			}
+		}
 
         [ChatCommand("tp")]
         private void cmdChatTeleport(BasePlayer player, string command, string[] args)
@@ -978,6 +1069,8 @@ namespace Oxide.Plugins
                         return;
                     }
                     player.SetParent(null, true, true);
+//                    if(player.isMounted)
+//                        player.DismountObject();
                     TeleportToPlayer(player, target);
                     PrintMsgL(player, "AdminTP", target.displayName);
                     Puts(_("LogTeleport", null, player.displayName, target.displayName));
@@ -1958,14 +2051,15 @@ namespace Oxide.Plugins
             PlayersRequests[target.userID] = player;
             PendingRequests[target.userID] = timer.Once(configData.TPR.RequestDuration, () => { RequestTimedOut(player, target); });
             PrintMsgL(player, "Request", target.displayName);
-            PrintMsgL(target, "RequestTarget", player.displayName);
+			if (string.IsNullOrEmpty(command) || command != "notpa")
+				PrintMsgL(target, "RequestTarget", player.displayName);
         }
 
         [ChatCommand("tpa")]
         private void cmdChatTeleportAccept(BasePlayer player, string command, string[] args)
         {
             if (!configData.Settings.TPREnabled) return;
-            if (args.Length != 0)
+            if ((string.IsNullOrEmpty(command) || command != "notpa") && args.Length != 0)
             {
                 PrintMsgL(player, "SyntaxCommandTPA");
                 return;
@@ -1973,7 +2067,8 @@ namespace Oxide.Plugins
             Timer reqTimer;
             if (!PendingRequests.TryGetValue(player.userID, out reqTimer))
             {
-                PrintMsgL(player, "NoPendingRequest");
+                if (string.IsNullOrEmpty(command) || command != "notpa")
+					PrintMsgL(player, "NoPendingRequest");
                 return;
             }
             var err = CheckPlayer(player, false, CanCraftTPR(player), false);
@@ -2012,8 +2107,11 @@ namespace Oxide.Plugins
                 }
             }
             var countdown = GetLower(originPlayer, configData.TPR.VIPCountdowns, configData.TPR.Countdown);
-            PrintMsgL(originPlayer, "Accept", player.displayName, countdown);
-            PrintMsgL(player, "AcceptTarget", originPlayer.displayName);
+            if (string.IsNullOrEmpty(command) || command != "notpa")
+			{
+				PrintMsgL(originPlayer, "Accept", player.displayName, countdown);
+				PrintMsgL(player, "AcceptTarget", originPlayer.displayName);
+			}
             var timestamp = Facepunch.Math.Epoch.Current;
             TeleportTimers[originPlayer.userID] = new TeleportTimer
             {
@@ -2629,8 +2727,10 @@ namespace Oxide.Plugins
         {
             SaveLocation(player);
             teleporting.Add(player.userID);
+			player.SetParent(null, true, true);
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "StartLoading");
+			player.SetParent(null,0);  // allows teleport off moving objects
             StartSleeping(player);
             player.MovePosition(position);
             if (player.net?.connection != null)
@@ -2775,18 +2875,20 @@ namespace Oxide.Plugins
             {
                 var cavename = entry.Key;
                 float realdistance = 0f;
-                if(cavename.Contains("Large"))
+
+                if(cavename.Contains("Small"))
                 {
-                    realdistance = 75f;
+                    realdistance = configData.Settings.CaveDistanceSmall;
+                }
+                else if(cavename.Contains("Large"))
+                {
+                    realdistance = configData.Settings.CaveDistanceLarge;
                 }
                 else if(cavename.Contains("Medium"))
                 {
-                    realdistance =  50f;
+                    realdistance = configData.Settings.CaveDistanceMedium;
                 }
-                else
-                {
-                    realdistance = 20f;
-                }
+
                 var cavevector = entry.Value;
                 cavevector.y = pos.y;
                 var cpos = cavevector.ToString();
@@ -2794,7 +2896,16 @@ namespace Oxide.Plugins
 
                 if(dist < realdistance)
                 {
+#if DEBUG
+                    Puts($"NearCave: {cavename} nearby.");
+#endif
                     return cavename;
+                }
+                else
+                {
+#if DEBUG
+                    Puts("NearCave: Not near this cave.");
+#endif
                 }
             }
             return null;
@@ -2816,8 +2927,11 @@ namespace Oxide.Plugins
             }
             if(configData.Home.AllowCave == false)
             {
-                string monname = NearCave(player);
-                if(monname != null)
+#if DEBUG
+                Puts("Checking cave distance...");
+#endif
+                string cavename = NearCave(player);
+                if(cavename != null)
                 {
                     return "TooCloseToCave";
                 }
