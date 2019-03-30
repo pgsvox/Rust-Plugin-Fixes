@@ -30,9 +30,13 @@ namespace Oxide.Plugins
 			int loop_counter = 0;
 			BasePlayer bplayer = player.Object as BasePlayer;
             Vector3 newPos = RecyclerList.GetRandom().transform.position;
+			if (!bplayer.CanBuild())
+			{
+				player.Message(Lang("BuildingBlocked", player.Id.ToString()));
+				return;
+			}
 			while (loop_counter < 21 && (bplayer.IsBuildingBlocked(newPos, new Quaternion(0, 0, 0, 0), new Bounds(Vector3.zero, Vector3.zero))))
 			{
-				Puts(loop_counter.ToString());
 				if (bplayer.IsBuildingBlocked(newPos, new Quaternion(0, 0, 0, 0), new Bounds(Vector3.zero, Vector3.zero)))
 				{
 					newPos = RecyclerList.GetRandom().transform.position;
@@ -41,12 +45,12 @@ namespace Oxide.Plugins
 			}
 			if (bplayer.IsBuildingBlocked(newPos, new Quaternion(0, 0, 0, 0), new Bounds(Vector3.zero, Vector3.zero)))
 			{
-				player.Message(Lang("RecyclerBlockedm ", player.Id.ToString()));
+				player.Message(Lang("RecyclerBlocked ", player.Id.ToString()));
 				return;
 			}
 			else
 			{
-				timer.Once((int)Config["TeleportSeconds"], () => { player.Teleport(new GenericPosition(newPos.x, newPos.y + 2.0f, newPos.z)); });
+				timer.Once((int)Config["TeleportSeconds"], () => { bplayer.SetParent(null,0); player.Teleport(new GenericPosition(newPos.x, newPos.y + 2.0f, newPos.z)); });
 				player.Message(Lang("Teleporting", player.Id.ToString(), Config["TeleportSeconds"].ToString()));
 			}
         }
@@ -66,6 +70,7 @@ namespace Oxide.Plugins
             {
                 ["NoPermission"] = "<color=red>You don't have permission to use this command.</color>",
                 ["Teleporting"] = "Teleporting to recycler in <color=yellow>{0}</color> seconds.",
+                ["BuildingBlocked"] = "You are building blocked and cannot teleport to a recycler.",
                 ["RecyclerBlocked"] = "Could not find an unblocked recycler.",
                 ["NoRecyclers"] = "No recyclers found."
             }, this);
