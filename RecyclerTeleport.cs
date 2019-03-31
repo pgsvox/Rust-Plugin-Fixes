@@ -27,9 +27,10 @@ namespace Oxide.Plugins
 
         private void TeleportToRecycler(IPlayer player)
         {
+			int randomRecycler = UnityEngine.Random.Range(0,RecyclerList.Count-1);
 			int loop_counter = 0;
 			BasePlayer bplayer = player.Object as BasePlayer;
-            Vector3 newPos = RecyclerList.GetRandom().transform.position;
+            Vector3 newPos = RecyclerList[randomRecycler].transform.position;
 			if (!bplayer.CanBuild())
 			{
 				player.Message(Lang("BuildingBlocked", player.Id.ToString()));
@@ -39,6 +40,13 @@ namespace Oxide.Plugins
 			{
 				if (bplayer.IsBuildingBlocked(newPos, new Quaternion(0, 0, 0, 0), new Bounds(Vector3.zero, Vector3.zero)))
 				{
+					RecyclerList.RemoveAt(randomRecycler);
+		            if (RecyclerList.Count == 0) 
+					{ 
+						player.Message(Lang("NoRecyclers", player.Id.ToString())); 
+						return; 
+					}
+					randomRecycler = UnityEngine.Random.Range(0,RecyclerList.Count-1);
 					newPos = RecyclerList.GetRandom().transform.position;
 					loop_counter++;
 				}
