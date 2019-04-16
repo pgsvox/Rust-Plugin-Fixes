@@ -20,7 +20,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("NTeleportation", "RFC1920", "1.0.53", ResourceId = 1832)]
+    [Info("NTeleportation", "RFC1920", "1.0.57", ResourceId = 1832)]
     class NTeleportation : RustPlugin
     {
         private static readonly Vector3 Up = up;
@@ -40,9 +40,9 @@ namespace Oxide.Plugins
         private const string PermTpTown = "nteleportation.tptown";
         private const string PermTpN = "nteleportation.tpn";
         private const string PermTpL = "nteleportation.tpl";
-		private const string PermTpT = "nteleportation.tpt";
         private const string PermTpRemove = "nteleportation.tpremove";
         private const string PermTpSave = "nteleportation.tpsave";
+		private const string PermTpT = "nteleportation.tpt";
         private const string PermWipeHomes = "nteleportation.wipehomes";
         private const string PermCraftHome = "nteleportation.crafthome";
         private const string PermCraftTown = "nteleportation.crafttown";
@@ -102,6 +102,8 @@ namespace Oxide.Plugins
             public bool InterruptTPOnRig { get; set; }
             public bool InterruptTPOnLift { get; set; }
             public bool InterruptTPOnMonument { get; set; }
+            public bool InterruptTPOnSwimming { get; set; }
+            public bool InterruptTPOnMounted { get; set; }
             public float CaveDistanceSmall { get; set; }
             public float CaveDistanceMedium { get; set; }
             public float CaveDistanceLarge { get; set; }
@@ -242,6 +244,8 @@ namespace Oxide.Plugins
                     InterruptTPOnCargo = true,
                     InterruptTPOnRig = false,
                     InterruptTPOnLift = true,
+                    InterruptTPOnSwimming = true,
+                    InterruptTPOnMounted = true,
                     InterruptTPOnMonument = false,
                     CaveDistanceSmall = 40f,
                     CaveDistanceMedium = 60f,
@@ -653,6 +657,14 @@ namespace Oxide.Plugins
                     })
                 },
                 {
+                    "SyntaxCommandTPT", string.Join(NewLine, new[]
+                    {
+                        "A Syntax Error Occurred!",
+                        "You can only use the /tpt command as follows:",
+                        "/tpt \"player name\" - Teleports you to a team or clan member."
+                    })
+                },
+                {
                     "SyntaxCommandTPR", string.Join(NewLine, new[]
                     {
                         "A Syntax Error Occurred!",
@@ -682,14 +694,6 @@ namespace Oxide.Plugins
                         "A Syntax Error Occurred!",
                         "You can only use the teleport.topos console command as follows:",
                         " > teleport.topos \"player\" x y z"
-                    })
-                },
-                {
-                    "SyntaxCommandTPT", string.Join(NewLine, new[]
-                    {
-                        "A Syntax Error Occurred!",
-                        "You can only use the /tpt command as follows:",
-                        "/tpt \"player name\" - Teleports you to a team or clan member."
                     })
                 },
                 {
@@ -1367,7 +1371,11 @@ namespace Oxide.Plugins
                 string name = null;
                 if(monument.name == "OilrigAI")
                 {
-                    name = "Oilrig";
+                    name = "Small Oilrig";
+                }
+                else if(monument.name == "OilrigAI2")
+                {
+                    name = "Large Oilrig";
                 }
                 else
                 {
@@ -1466,8 +1474,12 @@ namespace Oxide.Plugins
                     if (target == null) return;
                     if (target == player)
                     {
+#if DEBUG
+                        Puts("Debug mode - allowing self teleport.");
+#else
                         PrintMsgL(player, "CantTeleportToSelf");
                         return;
+#endif
                     }
                     player.SetParent(null, true, true);
 //                    if(player.isMounted)
@@ -1558,8 +1570,12 @@ namespace Oxide.Plugins
                     if (target == null) return;
                     if (target == player)
                     {
+#if DEBUG
+                        Puts("Debug mode - allowing self teleport.");
+#else
                         PrintMsgL(player, "CantTeleportToSelf");
                         return;
+#endif
                     }
                     int distance;
                     if (args.Length != 2 || !int.TryParse(args[1], out distance))
@@ -1680,13 +1696,23 @@ namespace Oxide.Plugins
                 return;
             }
             AdminData adminData;
+            var err = CheckPlayer(player, configData.TPR.UsableOutOfBuildingBlocked, CanCraftTPR(player), true);
+            if (err != null)
+            {
+                PrintMsgL(player, err);
+                return;
+            }
             if (!Admin.TryGetValue(player.userID, out adminData) || adminData.PreviousLocation == default(Vector3))
             {
                 PrintMsgL(player, "NoPreviousLocationSaved");
                 return;
             }
+
             Teleport(player, adminData.PreviousLocation);
             adminData.PreviousLocation = default(Vector3);
+			// clear tpb for non-admins to avoid abuse
+			if (!player.IsAdmin)
+				Admin[player.userID] = adminData = new AdminData();
             changedAdmin = true;
             PrintMsgL(player, "AdminTPBack");
             Puts(_("LogTeleportBack", null, player.displayName));
@@ -1800,6 +1826,12 @@ namespace Oxide.Plugins
         {
             if (!IsAllowed(player, PermHome)) return;
             if (!configData.Settings.HomesEnabled) return;
+            var err = CheckPlayer(player, configData.TPR.UsableOutOfBuildingBlocked, CanCraftTPR(player), true);
+            if (err != null)
+            {
+                PrintMsgL(player, err);
+                return;
+            }
             if (args.Length == 0)
             {
                 PrintMsgL(player, "SyntaxCommandHome");
@@ -2314,8 +2346,12 @@ namespace Oxide.Plugins
             var target = targets[0];
             if (target == player)
             {
+#if DEBUG
+                Puts("Debug mode - allowing self teleport.");
+#else
                 PrintMsgL(player, "CantTeleportToSelf");
                 return;
+#endif
             }
             var err = CheckPlayer(player, configData.TPR.UsableOutOfBuildingBlocked, CanCraftTPR(player), true);
             if (err != null)
@@ -2361,10 +2397,10 @@ namespace Oxide.Plugins
                     if(foundmoney == true)
                     {
                         CheckEconomy(player, configData.TPR.Bypass, true);
-                        PrintMsgL(player, "TPRCooldownBypass", configData.TPR.Bypass);
+                        PrintMsgL(player, "TPRCooldownBypass", configData.TPR.Pay);
                         if(payalso)
                         {
-                            PrintMsgL(player, "PayToTPR", configData.TPR.Pay);
+                            PrintMsgL(player, "PayToTPR", configData.TPR.Bypass);
                         }
                     }
                     else
@@ -2435,19 +2471,6 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "TPBlockedItem", err);
                 return;
             }
-            if(UseEconomy())
-            {
-                if (configData.TPR.Pay > 0 && !CheckEconomy(player, configData.TPR.Pay))
-                {
-                    PrintMsgL(player, "TPNoMoney", configData.TPR.Pay);
-                    return;
-                }
-                else if(configData.TPR.Pay > 0)
-                {
-                    var w = CheckEconomy(player, (double)configData.TPR.Pay, true);
-                    PrintMsgL(player, "TPMoney", (double)configData.TPR.Pay);
-                }
-            }
             PlayersRequests[player.userID] = target;
             PlayersRequests[target.userID] = player;
             PendingRequests[target.userID] = timer.Once(configData.TPR.RequestDuration, () => { RequestTimedOut(player, target); });
@@ -2510,6 +2533,7 @@ namespace Oxide.Plugins
                 }
             }
             var countdown = GetLower(originPlayer, configData.TPR.VIPCountdowns, configData.TPR.Countdown);
+
             if (string.IsNullOrEmpty(command) || command != "notpa")
 			{
 				PrintMsgL(originPlayer, "Accept", player.displayName, countdown);
@@ -3133,8 +3157,8 @@ namespace Oxide.Plugins
 			player.SetParent(null, true, true);
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "StartLoading");
-			player.SetParent(null,0);  // allows teleport off moving objects
-            StartSleeping(player);
+            player.SetParent(null,0);  // allows teleport off moving objects
+			StartSleeping(player);
             player.MovePosition(position);
             if (player.net?.connection != null)
                 player.ClientRPCPlayer(null, player, "ForcePositionTo", position);
@@ -3191,7 +3215,7 @@ namespace Oxide.Plugins
             var blockRotation = buildingBlock.transform.rotation.eulerAngles.y;
             var angles = new[] { 360 - blockRotation, 180 - blockRotation };
             var location = default(Vector3);
-            const double r = 1.9;
+            const double r = 2.9;
             var locationDistance = 100f;
 
 #if DEBUG
@@ -3341,7 +3365,7 @@ namespace Oxide.Plugins
                     return "TooCloseToCave";
                 }
             }
-            if(player.isMounted)
+            if(player.isMounted && configData.Settings.InterruptTPOnMounted == true)
                 return "TPMounted";
             if(!player.IsAlive())
                 return "TPDead";
@@ -3360,10 +3384,10 @@ namespace Oxide.Plugins
 
             if(!build && !player.CanBuild())
                 return "TPBuildingBlocked";
-            if(player.IsSwimming())
+            if(player.IsSwimming() && configData.Settings.InterruptTPOnSwimming == true)
                 return "TPSwimming";
             // This will have to do until we have a proper parent name for this
-            if(monname == "Oilrig" && configData.Settings.InterruptTPOnRig == true)
+            if(monname != null && monname.Contains("Oilrig") && configData.Settings.InterruptTPOnRig == true)
                 return "TPOilRig";
             if(onship && configData.Settings.InterruptTPOnCargo == true)
                 return "TPCargoShip";
